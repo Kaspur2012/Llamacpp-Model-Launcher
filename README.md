@@ -5,7 +5,7 @@ Side panel allows you to remove/add/edit/duplicate model parameters and run them
 
 Command button display common use parameters and their usage along with all parameter and their description under llamaccp help(this file is editable as all files).
 
-![Main_UI](https://github.com/Kaspur2012/Llamacpp-Model-Launcher/blob/main/Main_UI.PNG)
+![Main_UI](https://github.com/Kaspur2012/Llamacpp-Model-Launcher/blob/main/main_panel.PNG)
 
 
 
