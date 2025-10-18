@@ -1,5 +1,9 @@
 # Llamacpp-Model-Launcher
-Its purpose is to replace the tedious and error-prone process of typing long commands into a terminal. With this launcher, you can manage, edit, delete, duplicate and run all your language models with the point-and-click simplicity of a modern desktop application. Side panel allows you to remove/add/edit/duplicate model parameters and run them easily. Command hutton display common use parameter and their usage along with all parameter and their description under llamaccp help(this file is editable as all files).
+Its purpose is to replace the tedious and error-prone process of typing long commands into a terminal. With this launcher, you can manage, edit, delete, duplicate and run all your language models with the point-and-click simplicity of a modern desktop application. 
+
+Side panel allows you to remove/add/edit/duplicate model parameters and run them easily. 
+
+Command button display common use parameters and their usage along with all parameter and their description under llamaccp help(this file is editable as all files).
 
 ![Main_UI](https://github.com/Kaspur2012/Llamacpp-Model-Launcher/blob/main/Main_UI.PNG)
 
