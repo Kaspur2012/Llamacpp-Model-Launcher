@@ -1,0 +1,154 @@
+## Llama.cpp Model Launcher: User Guide
+
+### 1. Introduction
+
+Welcome to the Llama.cpp Model Launcher! This application provides a clean, powerful, and user-friendly graphical interface (GUI) for the `llama-server.exe` tool from the Llama.cpp project.
+
+Its purpose is to replace the tedious and error-prone process of typing long commands into a terminal. With this launcher, you can manage, edit, delete, duplicate and run all your language models with the point-and-click simplicity of a modern desktop application.
+
+### 2. First-Time Setup
+
+Before you can launch a model, you need to tell the application where to find two key items. This is a one-time setup, and your choices will be saved for future sessions.
+
+1.  **Set the Llama.cpp Directory**:
+    *   Click the **Browse...** button next to the "Llama.cpp Directory" label.
+    *   Navigate to and select the folder that contains your `llama-server.exe` file.
+    *   The application will verify that `llama-server.exe` exists in the selected folder.
+
+2.  **Set the Models File**:
+    *   Click the **Browse...** button next to the "Models File" label.
+    *   Select the `.txt` file that contains your model launch commands.
+    *   **File Format**: This text file must be structured with a model name on one line, followed immediately by its full launch command on the next line. For example:
+        ```
+		Llama-3.3-70B-Instruct-UD-IQ3_XXS
+		llama-server.exe -m D:\lm_studio\unsloth\Llama-3.3-70B-Instruct-GGUF\Llama-3.3-70B-Instruct-UD-IQ3_XXS.gguf -md D:\lm_studio\lmstudio-community\Llama-3.2-1B-Instruct-GGUF\Llama-3.2-1B-Instruct-Q4_K_M.gguf --jinja -c 13000 -ngld 99 -ngl 99 -fa on --temp 0.8 --top-k 40 --top-p 0.95 --min-p 0.05 --repeat-penalty 1.1 --cache-type-k q8_0 --cache-type-v q8_0 --cache-type-k-draft q8_0 --cache-type-v-draft q8_0 --no-mmap -ts 63/18 -t 8 --device-draft CUDA0 --main-gpu 0 --no-warmup --override-tensor token_embd.weight=CUDA0
+
+        gpt-oss-20b-MXFP4
+		llama-server.exe -m D:\lm_studio\lmstudio-community\gpt-oss-20b-GGUF\gpt-oss-20b-MXFP4.gguf --jinja -c 131000 -ngl 999 -fa on --temp 1.0 --top-k 100 --top-p 1.0 --min-p 0.05 --repeat-penalty 1.1 --no-mmap --split-mode none --main-gpu 0 --chat-template-kwargs "{\"reasoning_effort\": \"medium\"}" --no-warmup --parallel 1 --ubatch-size 4096 --batch-size 8192
+        ```
+
+Once both paths are set, the **Model Selection** dropdown menu will automatically populate with the names from your text file.
+
+### 3. The Main Interface
+
+The application is divided into two main panels.
+
+#### Left Panel: Main Control & Display
+This is where you select and control the model server.
+
+*   **Model Selection Dropdown**: Choose the model configuration you wish to load.
+*   **Web UI Options**:
+    *   `Enable Web UI`: Keep this checked to run the standard web server. Unchecking it adds the `--no-webui` flag to the command.
+    *   `Auto-Open Web UI`: If checked, your web browser will automatically open to the server's page (`http://localhost:8080`) a single time after the model successfully loads. It will then be unchecked so no more pages will open UNLESS you re-check it or relaunch the app.
+*   **Process Control Buttons**:
+    *   **Load Model**: Builds the final command from the editor and starts the `llama-server.exe` process.
+    *   **Unload Model**: Forcefully stops the server process.
+    *   **Exit**: Stops any running server and closes the application.
+*   **Status Indicator**: A colored dot gives you an at-a-glance view of the server's state:
+    *   **Red (Unloaded)**: The server is not running.
+    *   **Yellow (Loading...)**: The server has started and is loading the model into memory.
+    *   **Green (Loaded)**: The model is successfully loaded and ready to accept requests.
+    *   **Red (Error)**: The server process terminated unexpectedly (e.g., due to a bad parameter).
+*   **Output / Commands View**:
+    *   The main text area shows the **live output** from the server by default, which is useful for monitoring loading progress and API requests.
+    *   Click the **Commands** button to switch the view. It will load and display the content of a text file named **`models_commands.txt`**, which should be located in the same directory as the text file you selected for your "Models File". This reference file contains a comprehensive list of commands from the Llama.cpp project and can be customized with your own notes. Click **Show Output** to return to the live log.
+
+#### Right Panel: Configuration Editor
+This is where you can view and modify all aspects of the selected model's configuration.
+
+*   **Model Name**: An editable field for the display name that appears in the dropdown.
+*   **Parameter Editor**: A dynamic list of all parameters for the selected command.
+    *   Flags (like `--no-mmap`) are shown as **checkboxes**. Uncheck to disable them.
+    *   Parameters with values (like `-c 4096`) are shown as **text fields**.
+*   **Add New Parameter**: Allows you to add any valid Llama.cpp parameter to the current configuration on the fly.
+*   **Action Buttons**:
+    *   **Add Model**: Prepares the editor for a new model configuration using a default template.
+    *   **Delete Model**: Deletes the currently selected model from your `.txt` file.
+    *   **Reset**: Discards any changes made in the editor and reloads the parameters for the selected model that is CURRENTLY saved in models text file.
+    *   **Save to File**: Permanently saves all changes (name and parameters) to your `.txt` file.
+
+### 4. Core Workflow: Launching a Model
+
+1.  **Select a Model**: Choose a model from the dropdown menu on the left.
+2.  **Tune Parameters**: The model's parameters will appear in the editor on the right. You can:
+    *   Change the context size by editing the value for the `-c` parameter.
+    *   Enable or disable a flag by checking or unchecking its box.
+    *   Remove a parameter by clicking the **"X"** button next to it.
+    *   Add a new one, like `--temp 0.7`, using the "Add New Parameter" section.
+3.  **Launch the Model**: Click the **Load Model** button.
+4.  **Monitor Progress**: The Status Indicator will turn yellow, and the Output View will show the real-time log from Llama.cpp as it loads the model.
+5.  **Use the Model**: Once the log indicates the server is "listening" and the Status Indicator turns green, the model is ready. If "Auto-Open Web UI" was checked, a browser tab will open automatically.
+6.  **Shut Down**: When finished, click **Unload Model** to stop the server or **Exit** to close the application.
+
+### 5. Managing Your Models (alway keep a backup of Model File..just in case)
+
+The launcher's configuration management features allow you to modify your model library without manually editing text files.
+
+#### To Edit an Existing Model:
+
+1.  Select the model from the dropdown.
+2.  In the right panel, change the **Model Name** and/or any of its **parameters**.
+3.  Click **Save to File**. The old name and command will be updated in your `.txt` file.
+
+#### To Add a New Model:
+
+1.  Click the **Add Model** button.
+2.  The editor will be populated with a default template and a unique name (e.g., "New Model 1").
+3.  **Crucially, edit the `-m` parameter** to point to the correct `.gguf` file path for your new model.
+4.  Change the **Model Name** to something descriptive.
+5.  Adjust other parameters as needed.
+6.  Click **Save to File**. The new configuration will be added to the end of your `.txt` file.
+
+#### To Duplicate a Model:
+
+1.  Select the model you wish to duplicate from the dropdown.
+2.  Click the **Duplicate** button.
+3.  A duplicate model is created, you can delete/add parameters.
+4.  Don't forget to click save to file if you like the changes.
+
+#### To Delete a Model:
+
+1.  Select the model you wish to remove from the dropdown.
+2.  Click the **Delete Model** button.
+3.  A confirmation dialog will appear. Click **Yes** to proceed.
+4.  The model's name and its command will be permanently removed from your `.txt` file.
+
+### 6. Running the Application
+
+There are two primary ways to run this application:
+
+#### Method 1: Run from Python Source
+
+This method is ideal for developers or users who have Python installed and are comfortable with a code editor.
+
+1.  **Install Dependencies**: The application requires the PyQt6 library. Install it using pip:
+    ```bash
+    pip install PyQt6
+    ```
+2.  **Run the Script**: Save the application code as a Python file (e.g., `launcher.py`) and run it from your terminal or preferred code editor.
+
+#### Method 2: Compile to a Standalone Executable (.exe)
+
+This method packages the application into a single `.exe` file that can be run on any Windows machine without needing Python installed.
+
+1.  **Install PyInstaller**: This module handles the compilation process. Install it using pip:
+    ```bash
+    pip install pyinstaller
+    ```
+2.  **Run the Command**: Open a terminal in the directory where you saved the Python script. Run the following command:
+    ```bash
+    pyinstaller --onefile --windowed --icon=C:\path\to\your\icon.ico your_script_name.py
+    ```
+    *   `--onefile`: Packages everything into a single executable file.
+    *   `--windowed`: Prevents a console window from appearing when you run the app.
+    *   `--icon`: (Optional) Sets a custom icon for the executable. You can omit this flag if you don't have an `.ico` file.
+
+After the command completes, you will find your standalone `.exe` file inside a new `dist` folder.
+
+
+Common Issue:
+When you click load model and nothing happens:
+This usually means it doesn’t know where the llamacpp directory is. This usually happens to me
+when I update to a newer release of llamacpp. Browse to the new llamacpp directory.
+I am on window 10 so normally I just download the newest binary release of llamacpp, exact it
+and point the app to the extract folder.
