@@ -39,4 +39,4 @@ After the command completes, you will find your standalone `.exe` file inside a 
 
 
 ### File Structure
-models_commands.txt MUST be in the same directory as your model files(eg. model_commands_short.txt) directory.
+models_commands.txt MUST be in the same directory as your Model file(eg. model_commands_short.txt) directory.
