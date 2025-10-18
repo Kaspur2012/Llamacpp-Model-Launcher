@@ -8,8 +8,7 @@ Command button display common use parameters and their usage along with all para
 ![Main_UI](https://github.com/Kaspur2012/Llamacpp-Model-Launcher/blob/main/main_panel.PNG)
 
 
-
-### Running the Application
+## Running the Application
 
 There are two primary ways to run this application:
 
@@ -42,5 +41,5 @@ This method packages the application into a single `.exe` file that can be run o
 After the command completes, you will find your standalone `.exe` file inside a new `dist` folder.
 
 
-### File Structure
+## File Structure
 models_commands.txt MUST be in the same directory as your Model file(eg. model_commands_short.txt) directory.
