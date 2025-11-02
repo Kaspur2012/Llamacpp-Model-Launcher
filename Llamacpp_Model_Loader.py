@@ -332,6 +332,12 @@ class LlamaCppGUI(QWidget):
             browse_button.clicked.connect(lambda: self.browse_for_model_file(input_widget))
             field_layout.addWidget(input_widget);
             field_layout.addWidget(browse_button)
+        elif param == "--mmproj":
+            input_widget = QLineEdit(value)
+            browse_button = QPushButton("Browse...")
+            browse_button.clicked.connect(lambda: self.browse_for_mmproj_file(input_widget))
+            field_layout.addWidget(input_widget);
+            field_layout.addWidget(browse_button)
         elif value is None:
             input_widget = QCheckBox();
             input_widget.setChecked(True);
@@ -349,19 +355,28 @@ class LlamaCppGUI(QWidget):
         remove_button.setFixedWidth(30)
         remove_button.setToolTip(f"Remove {param}")
         if param == "Executable": remove_button.setEnabled(False)
-        remove_button.clicked.connect(lambda: self.remove_parameter_row(param))
+        remove_button.clicked.connect(self.remove_parameter_row)
         field_layout.addWidget(remove_button)
         self.param_layout.addRow(QLabel(param), field_container)
 
-    def remove_parameter_row(self, param_to_remove):
-        for i in range(self.param_layout.rowCount()):
-            label = self.param_layout.itemAt(i, QFormLayout.ItemRole.LabelRole).widget()
-            if label.text() == param_to_remove:
-                self.param_layout.removeRow(i);
-                self.mark_as_dirty();
-                break
+    # --- CORRECTED: This logic now correctly finds the row to delete ---
+    def remove_parameter_row(self):
+        clicked_button = self.sender()
+        if not clicked_button:
+            return
 
-    # --- MODIFIED: Added dialog for adding duplicate parameters ---
+        # The button's direct parent widget is the container for the input field and the button.
+        field_container_to_remove = clicked_button.parent()
+
+        # Iterate through the form layout to find the row that contains this specific container widget.
+        for i in range(self.param_layout.rowCount()):
+            widget_in_row = self.param_layout.itemAt(i, QFormLayout.ItemRole.FieldRole).widget()
+
+            if widget_in_row == field_container_to_remove:
+                self.param_layout.removeRow(i)
+                self.mark_as_dirty()
+                break # Exit the loop once the correct row has been found and removed.
+
     def add_new_parameter_from_input(self):
         param_name = self.new_param_name_input.text().strip()
         param_value = self.new_param_value_input.text().strip()
@@ -369,7 +384,6 @@ class LlamaCppGUI(QWidget):
             QMessageBox.warning(self, "Input Error", "Parameter must start with '-' or '--'.");
             return
 
-        # Check if the parameter already exists
         parameter_exists = any(self.param_layout.itemAt(i, QFormLayout.ItemRole.LabelRole).widget().text() == param_name
                                for i in range(self.param_layout.rowCount()))
 
@@ -379,11 +393,10 @@ class LlamaCppGUI(QWidget):
                                          "Some parameters (like -ot) can be added multiple times.\n\n"
                                          "Do you want to add it anyway?",
                                          QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                         QMessageBox.StandardButton.No)  # Default to No
+                                         QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.No:
-                return  # User chose not to add the duplicate
+                return
 
-        # Proceed to add the parameter
         self._add_parameter_row(param_name, param_value if param_value else None)
         self.new_param_name_input.clear();
         self.new_param_value_input.clear()
@@ -578,8 +591,10 @@ class LlamaCppGUI(QWidget):
         self.update_button_states()
         self.clear_dirty_state()
         if self.model_dropdown.count() > 0:
+            self.model_dropdown.blockSignals(True)
             self.model_dropdown.setCurrentIndex(0)
-            self.previous_model_index = 0
+            self.model_dropdown.blockSignals(False)
+            self.model_selected(0)
         else:
             self.model_selected(-1)
 
@@ -687,11 +702,28 @@ class LlamaCppGUI(QWidget):
             self.models_file_label.setText(f'Models File: {self.models_file}'); self.models_file_label.setStyleSheet("")
 
     def closeEvent(self, event):
-        self.unload_model();
+        if self.is_dirty:
+            reply = QMessageBox.question(self, 'Unsaved Changes',
+                                         "You have unsaved changes. Do you want to save them before exiting?",
+                                         QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+                                         QMessageBox.StandardButton.Cancel)
+
+            if reply == QMessageBox.StandardButton.Save:
+                self.save_parameters()
+            elif reply == QMessageBox.StandardButton.Cancel:
+                event.ignore()
+                return
+
+        self.unload_model()
         event.accept()
 
     def browse_for_model_file(self, line_edit_widget):
-        file, _ = QFileDialog.getOpenFileName(self, "Select Model File", "", "GGUF Files (*.gguf)")
+        file, _ = QFileDialog.getOpenFileName(self, "Select Model File", "", "GGUF Files (*.gguf);;All Files (*)")
+        if file:
+            line_edit_widget.setText(file)
+
+    def browse_for_mmproj_file(self, line_edit_widget):
+        file, _ = QFileDialog.getOpenFileName(self, "Select MMPROJ File", "", "GGUF Files (*.gguf);;All Files (*)")
         if file:
             line_edit_widget.setText(file)
 
@@ -758,4 +790,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-
+    
