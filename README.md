@@ -43,3 +43,22 @@ After the command completes, you will find your standalone `.exe` file inside a 
 
 ## File Structure
 models_commands.txt MUST be in the same directory as your Model file(eg. model_commands_short.txt) directory.
+
+
+## Changes Log:
+
+Nov 1 2025:
+*   **updated model_commands_short.txt to have more model specially qwen3 vl models.**
+
+*   **Added `--mmproj` Parameter Functionality**:
+    *   The parameter editor now recognizes `--mmproj` and adds a "Browse..." button next to its text field.
+    *   This button opens a file dialog to let you select the correct model projection file.
+
+*   **Added Unsaved Changes Check on Exit**:
+    *   If you have unsaved changes in the parameter editor and try to close the application, a popup will now appear asking if you want to save, discard, or cancel.
+
+*   **Fixed Initial Model Loading Bug**:
+    *   Corrected an issue where the parameter editor would be empty on startup for the first model in the list. The editor now correctly populates when the application first launches.
+
+*   **Fixed Parameter Deletion Bug**:
+    *   Resolved a critical bug where clicking the "X" button on a parameter in a long, scrollable list (especially with duplicate parameter names) would delete the wrong entry. Deleting a parameter now reliably removes the correct row.
