@@ -46,6 +46,24 @@ models_commands.txt MUST be in the same directory as your Model file(eg. model_c
 
 
 ## Changes Log:
+Nov 6 2025:
+
+**✨ Features**
+*   **New Interactive Parameter Browser**:
+    The "Commands" button now opens a powerful, interactive UI for exploring and adding Llama.cpp parameters, replacing the previous static text view.
+    Organized & Discoverable: Parameters are grouped into collapsible categories (e.g., "Sampling," "GPU," "Context") for easy navigation and discovery.
+    Live Search: Instantly filter all available parameters by name, description, or command-line flag (e.g., --top-k). The search bar also includes a clear button for convenience.
+    One-Click Add: Each parameter in the browser has its own "Add" button to instantly add it (with its value) to your currently selected model configuration in the Parameter Editor.
+    
+*   **📈 Improvements**
+    Improved Workflow: The UI now remains in the Parameter Browser after adding a parameter, allowing you to add multiple parameters in a single session without interruption.
+    External Parameter Database: The extensive list of Llama.cpp parameters has been moved to a separate parameters_db.py file, making the main application code significantly cleaner and easier to manage.
+    
+**🐛 Bug Fixes**
+*   Fixed a critical bug where deleting a parameter from a long, scrollable list (especially with duplicate parameter names like -ot) would remove the wrong entry.
+    Resolved a startup issue where the Parameter Editor would be empty for the first model selected when the application launched.
+    Fixed an issue where the --mmproj parameter incorrectly opened a directory browser instead of a file browser.
+    Added a confirmation dialog for unsaved changes when exiting the application to prevent accidental data loss.
 
 Nov 1 2025:
 *   **updated model_commands_short.txt to have more model specially qwen3 vl models.**
