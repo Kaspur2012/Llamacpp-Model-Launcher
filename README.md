@@ -52,6 +52,7 @@ This method is ideal for developers or users who have Python installed and are c
 2.  **Run the Script**: Save the application code as a Python file (e.g., `launcher.py`) and run it from your terminal or preferred code editor.
 
 #### Method 2: Compile to a Standalone Executable (.exe)
+I have uploaded the latest exe file but it is highly recommended you build it yourself.
 
 This method packages the application into a single `.exe` file that can be run on any Windows machine without needing Python installed.
 
