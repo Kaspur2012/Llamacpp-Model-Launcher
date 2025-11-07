@@ -71,7 +71,8 @@ Features
 
 There are two primary ways to run this application:
 
-#### Method 1: Run from Python Source
+<details>
+<summary><strong>Method 1: Run from Python Source</strong></summary>
 
 This method is ideal for developers or users who have Python installed and are comfortable with a code editor.
 
@@ -79,9 +80,12 @@ This method is ideal for developers or users who have Python installed and are c
     ```bash
     pip install PyQt6
     ```
-2.  **Run the Script**: Save the application code as a Python file (e.g., `launcher.py`) and run it from your terminal or preferred code editor.
+2.  **Run the Script**: Save the application code as a Python file (e.g., Llama_Model_Loader.py, parameters_db.py, model_file_examples.txt in the same directory) and run it from your terminal or preferred code editor.
+</details>
 
-#### Method 2: Compile to a Standalone Executable (.exe)
+<details>
+<summary><strong>Method 2: Compile to a Standalone Executable (.exe)</strong></summary>
+
 I have uploaded the latest exe file but it is highly recommended you build it yourself.
 
 This method packages the application into a single `.exe` file that can be run on any Windows machine without needing Python installed.
@@ -99,6 +103,8 @@ This method packages the application into a single `.exe` file that can be run o
     *   `--icon`: (Optional) Sets a custom icon for the executable. You can omit this flag if you don't have an `.ico` file.
 
 After the command completes, you will find your standalone `.exe` file inside a new `dist` folder.
+You can create your own model_file.txt from scratch or save the model_file_examples.txt from this repo as a reference for edit/duplication, you can alway delete any unwanted model out from it.
+</details>
 
 
 ## File Structure
