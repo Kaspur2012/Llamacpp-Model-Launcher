@@ -4,6 +4,9 @@
 # The 'options' for select types with numeric values have been converted
 # to a list of strings to ensure compatibility with the Python GUI application.
 
+# thanks https://x.com/unmortan for the info you see below
+# https://www.reddit.com/r/LocalLLaMA/comments/1opx9k2/comment/nnf2gr9/?context=1
+
 LLAMA_CPP_PARAMETERS = [
     {
         "name": "File Paths",
@@ -281,4 +284,5 @@ LLAMA_CPP_PARAMETERS = [
             {'name': 'FIM Qwen 30B Default', 'id': 'fim-qwen-30b-default', 'type': 'checkbox', 'default': False, 'description': 'Use default Qwen 3 Coder 30B A3B Instruct (note: can download weights from the internet)', 'prefix': '--fim-qwen-30b-default'},
         ]
     }
+
 ]
