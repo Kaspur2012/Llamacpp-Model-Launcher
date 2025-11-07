@@ -5,6 +5,8 @@ Side panel allows you to remove/add/edit/duplicate model parameters and run them
 
 Command button opens a powerful, interactive UI for exploring and adding Llama.cpp parameters.
 
+Notice!!! This was built with Window in mind and have not tested at all on other OS.
+
 ![Main_UI](https://github.com/Kaspur2012/Llamacpp-Model-Launcher/blob/main/Main_UI.PNG)
 
 
