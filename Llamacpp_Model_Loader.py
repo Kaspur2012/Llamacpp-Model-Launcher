@@ -15,6 +15,9 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QProcess, Qt, QTimer
 from PyQt6.QtGui import QFont, QPalette, QColor, QIcon
 
+# Import the parameter database from the separate file
+from parameters_db import LLAMA_CPP_PARAMETERS
+
 
 class LlamaCppGUI(QWidget):
     def __init__(self):
@@ -37,6 +40,8 @@ class LlamaCppGUI(QWidget):
 
         self.showing_commands = False
         self.showing_help = False
+
+        self.browser_param_rows = []
 
         self.init_ui()
         self.load_config()
@@ -110,13 +115,13 @@ class LlamaCppGUI(QWidget):
         self.output_viewer = QTextEdit()
         self.output_viewer.setReadOnly(True)
         self.output_viewer.setFont(QFont('Courier', 10))
-        self.commands_viewer = QTextEdit()
-        self.commands_viewer.setReadOnly(True)
-        self.commands_viewer.setFont(QFont('Courier', 10))
+
+        self.parameter_browser = self.create_parameter_browser()
+
         self.help_viewer = QTextEdit()
         self.help_viewer.setReadOnly(True)
         self.view_stack.addWidget(self.output_viewer)
-        self.view_stack.addWidget(self.commands_viewer)
+        self.view_stack.addWidget(self.parameter_browser)
         self.view_stack.addWidget(self.help_viewer)
         layout.addLayout(path_layout)
         layout.addWidget(self.model_dropdown)
@@ -124,6 +129,138 @@ class LlamaCppGUI(QWidget):
         layout.addLayout(controls_layout)
         layout.addWidget(self.view_stack)
         self.update_auto_open_visibility()
+
+    # --- MODIFIED: Added a clear button to the search bar ---
+    def create_parameter_browser(self):
+        main_widget = QWidget()
+        main_layout = QVBoxLayout(main_widget)
+        main_layout.setContentsMargins(5, 5, 5, 5)
+
+        search_bar = QLineEdit()
+        search_bar.setPlaceholderText("Search for a parameter...")
+        # This line adds the built-in clear button
+        search_bar.setClearButtonEnabled(True)
+        search_bar.textChanged.connect(self.filter_parameter_browser)
+        main_layout.addWidget(search_bar)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        main_layout.addWidget(scroll_area)
+
+        scroll_content = QWidget()
+        self.browser_layout = QVBoxLayout(scroll_content)
+        self.browser_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        scroll_area.setWidget(scroll_content)
+
+        self.browser_param_rows.clear()
+
+        for group in LLAMA_CPP_PARAMETERS:
+            group_box = QFrame()
+            group_box.setFrameShape(QFrame.Shape.StyledPanel)
+            group_layout = QVBoxLayout(group_box)
+
+            header_button = QPushButton(f"▼  {group['name']}")
+            header_button.setStyleSheet("text-align: left; font-weight: bold; padding: 5px;")
+            group_layout.addWidget(header_button)
+
+            content_widget = QWidget()
+            content_layout = QVBoxLayout(content_widget)
+            content_layout.setContentsMargins(10, 0, 0, 0)
+
+            for param in group['parameters']:
+                param_frame = QFrame()
+                param_layout = QHBoxLayout(param_frame)
+
+                text_widget = QWidget()
+                text_layout = QVBoxLayout(text_widget)
+                text_layout.setSpacing(2)
+                name_label = QLabel(f"{param['name']} ({param['prefix']})")
+                name_label.setStyleSheet("font-weight: bold;")
+                desc_label = QLabel(param['description'])
+                desc_label.setWordWrap(True)
+                text_layout.addWidget(name_label)
+                text_layout.addWidget(desc_label)
+                param_layout.addWidget(text_widget, 3)
+
+                input_widget = QWidget()
+                input_layout = QVBoxLayout(input_widget)
+
+                if param['type'] == 'checkbox':
+                    param_input = QCheckBox()
+                elif param['type'] == 'select':
+                    param_input = QComboBox()
+                    param_input.addItems(param['options'])
+                else:
+                    param_input = QLineEdit(str(param['default']))
+
+                add_button = QPushButton("Add")
+                add_button.clicked.connect(
+                    lambda chk=False, p=param, inp=param_input: self.add_parameter_from_browser(p, inp)
+                )
+
+                input_layout.addWidget(param_input)
+                input_layout.addWidget(add_button)
+                param_layout.addWidget(input_widget, 1)
+
+                content_layout.addWidget(param_frame)
+
+                self.browser_param_rows.append({'frame': param_frame, 'group': group_box, 'data': param})
+
+            content_widget.setLayout(content_layout)
+            group_layout.addWidget(content_widget)
+            self.browser_layout.addWidget(group_box)
+
+            header_button.clicked.connect(
+                lambda chk=False, w=content_widget, b=header_button: self.toggle_group_box(w, b))
+
+            content_widget.setVisible(False)
+            header_button.setText(f"►  {group['name']}")
+
+        return main_widget
+
+    def toggle_group_box(self, widget, button):
+        is_visible = widget.isVisible()
+        widget.setVisible(not is_visible)
+        if is_visible:
+            button.setText(button.text().replace("▼", "►"))
+        else:
+            button.setText(button.text().replace("►", "▼"))
+
+    def add_parameter_from_browser(self, param_data, input_widget):
+        param_prefix = param_data['prefix']
+        value = None
+
+        if isinstance(input_widget, QCheckBox):
+            if not input_widget.isChecked():
+                return
+            value = None
+        elif isinstance(input_widget, QComboBox):
+            value = input_widget.currentText()
+        elif isinstance(input_widget, QLineEdit):
+            value = input_widget.text().strip()
+
+        self._add_parameter_row(param_prefix, value)
+        self.mark_as_dirty()
+
+    def filter_parameter_browser(self, text):
+        search_term = text.lower().strip()
+        visible_groups = set()
+
+        for row in self.browser_param_rows:
+            param_name = row['data']['name'].lower()
+            param_desc = row['data']['description'].lower()
+            param_prefix = row['data']['prefix'].lower()
+
+            is_match = (search_term in param_name or
+                        search_term in param_desc or
+                        search_term in param_prefix)
+
+            row['frame'].setVisible(is_match)
+            if is_match:
+                visible_groups.add(row['group'])
+
+        for row in self.browser_param_rows:
+            row['group'].setVisible(row['group'] in visible_groups)
 
     def setup_right_panel(self, parent):
         layout = QVBoxLayout(parent)
@@ -193,43 +330,23 @@ class LlamaCppGUI(QWidget):
         if self.showing_commands:
             self.set_view(0)
         else:
-            self.load_and_display_commands(); self.set_view(1)
+            self.set_view(1)
 
     def toggle_help_view(self):
         if self.showing_help:
             self.set_view(0)
         else:
-            self.load_and_display_documentation(); self.set_view(2)
-
-    def load_and_display_commands(self):
-        if self.commands_viewer.toPlainText(): return
-        if not self.models_file:
-            self.commands_viewer.setText("\n\nCannot load commands: 'Models File' path is not set.");
-            return
-        base_dir = os.path.dirname(self.models_file)
-        commands_file_path = os.path.join(base_dir, 'models_commands.txt')
-        if not os.path.exists(commands_file_path):
-            error_msg = f"\n\nmodels_commands.txt not found.\n\nPlease make sure this file is in the same directory as your Models File:\n{base_dir}"
-            self.commands_viewer.setText(error_msg);
-            self.commands_viewer.setAlignment(Qt.AlignmentFlag.AlignCenter);
-            return
-        try:
-            with open(commands_file_path, 'r', encoding='utf-8') as f:
-                self.commands_viewer.setText(f.read())
-            self.commands_viewer.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        except Exception as e:
-            self.commands_viewer.setText(f"Error: Failed to read the commands file:\n{e}")
+            self.load_and_display_documentation()
+            self.set_view(2)
 
     def load_and_display_documentation(self):
         if self.help_viewer.toPlainText(): return
         if not self.models_file:
             self.help_viewer.setMarkdown("### Error\nCannot load documentation: 'Models File' path is not set.");
             return
-        base_dir = os.path.dirname(self.models_file)
-        commands_file_path = os.path.join(base_dir, 'models_commands.txt')
+        commands_file_path = os.path.join(os.path.dirname(self.models_file), 'models_commands.txt')
         if not os.path.exists(commands_file_path):
-            self.help_viewer.setMarkdown(
-                f"### File Not Found\n\n`models_commands.txt` could not be found.\n\nPlease make sure it is in:\n`{base_dir}`");
+            self.help_viewer.setMarkdown(f"### File Not Found\n`models_commands.txt` could not be found.");
             return
         try:
             with open(commands_file_path, 'r', encoding='utf-8') as f:
@@ -238,11 +355,7 @@ class LlamaCppGUI(QWidget):
             for line in lines:
                 if '-----Documentation-----' in line: in_doc_section = True; continue
                 if in_doc_section: doc_lines.append(line)
-            if doc_lines:
-                self.help_viewer.setMarkdown("".join(doc_lines))
-            else:
-                self.help_viewer.setMarkdown(
-                    "### No Documentation Found\nCould not find `-----Documentation-----` section in file.")
+            self.help_viewer.setMarkdown("".join(doc_lines) if doc_lines else "### No Documentation Found")
         except Exception as e:
             self.help_viewer.setMarkdown(f"### Error\nFailed to read file:\n`{e}`")
 
@@ -310,7 +423,8 @@ class LlamaCppGUI(QWidget):
                     self.command_parts.append((part, all_tokens[i + 1]));
                     i += 2
                 else:
-                    self.command_parts.append((part, None)); i += 1
+                    self.command_parts.append((part, None));
+                    i += 1
             else:
                 i += 1
 
@@ -359,23 +473,16 @@ class LlamaCppGUI(QWidget):
         field_layout.addWidget(remove_button)
         self.param_layout.addRow(QLabel(param), field_container)
 
-    # --- CORRECTED: This logic now correctly finds the row to delete ---
     def remove_parameter_row(self):
         clicked_button = self.sender()
-        if not clicked_button:
-            return
-
-        # The button's direct parent widget is the container for the input field and the button.
+        if not clicked_button: return
         field_container_to_remove = clicked_button.parent()
-
-        # Iterate through the form layout to find the row that contains this specific container widget.
         for i in range(self.param_layout.rowCount()):
             widget_in_row = self.param_layout.itemAt(i, QFormLayout.ItemRole.FieldRole).widget()
-
             if widget_in_row == field_container_to_remove:
                 self.param_layout.removeRow(i)
                 self.mark_as_dirty()
-                break # Exit the loop once the correct row has been found and removed.
+                break
 
     def add_new_parameter_from_input(self):
         param_name = self.new_param_name_input.text().strip()
@@ -383,10 +490,8 @@ class LlamaCppGUI(QWidget):
         if not param_name or not param_name.startswith('-'):
             QMessageBox.warning(self, "Input Error", "Parameter must start with '-' or '--'.");
             return
-
         parameter_exists = any(self.param_layout.itemAt(i, QFormLayout.ItemRole.LabelRole).widget().text() == param_name
                                for i in range(self.param_layout.rowCount()))
-
         if parameter_exists:
             reply = QMessageBox.question(self, "Parameter Exists",
                                          f"The parameter '{param_name}' already exists.\n\n"
@@ -396,7 +501,6 @@ class LlamaCppGUI(QWidget):
                                          QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.No:
                 return
-
         self._add_parameter_row(param_name, param_value if param_value else None)
         self.new_param_name_input.clear();
         self.new_param_value_input.clear()
@@ -427,7 +531,7 @@ class LlamaCppGUI(QWidget):
         while new_name in self.models: count += 1; new_name = f"{base_name} {count}"
         self.command_parts = [
             ('llama-server.exe', None), ('-m', 'D:\\path_to_your_model.gguf'), ('-c', '4096'),
-            ('-fa', 'on'), ('--temp', '0.1'), ('--top-k', '64'), ('--top-p', '0.95'), ('--min-p', '0.05')]
+            ('-fa', None), ('--temp', '0.1'), ('--top-k', '64'), ('--top-p', '0.95'), ('--min-p', '0.05')]
         self.model_dropdown.blockSignals(True);
         self.model_dropdown.setCurrentIndex(-1);
         self.model_dropdown.blockSignals(False)
@@ -546,7 +650,6 @@ class LlamaCppGUI(QWidget):
         if file:
             self.models_file = file;
             self.save_config();
-            self.commands_viewer.clear()
             self.parse_models_file()
         self.update_path_labels()
 
@@ -556,7 +659,6 @@ class LlamaCppGUI(QWidget):
             self.model_dropdown.clear();
             self.models.clear();
             return
-        self.commands_viewer.clear();
         self.help_viewer.clear()
         grouped_models = defaultdict(list)
         current_model_name = ""
@@ -564,7 +666,8 @@ class LlamaCppGUI(QWidget):
             with open(self.models_file, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not read models file:\n{e}"); return
+            QMessageBox.critical(self, "Error", f"Could not read models file:\n{e}");
+            return
         for i, line in enumerate(lines):
             line = line.strip()
             if not line or line.startswith('-----'): continue
@@ -617,7 +720,8 @@ class LlamaCppGUI(QWidget):
             temp_file.write(f'@echo off\n{command_str}');
             temp_file.close()
         except Exception as e:
-            QMessageBox.critical(self, "File Error", f"Could not create temp batch file:\n{e}"); return
+            QMessageBox.critical(self, "File Error", f"Could not create temp batch file:\n{e}");
+            return
         self.process = QProcess()
         self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.process.readyReadStandardOutput.connect(self.handle_stdout)
@@ -647,7 +751,8 @@ class LlamaCppGUI(QWidget):
             self.set_status('loaded')
             if self.open_on_load_checkbox.isChecked():
                 try:
-                    webbrowser.open('http://localhost:8080/'); self.open_on_load_checkbox.setChecked(False)
+                    webbrowser.open('http://localhost:8080/');
+                    self.open_on_load_checkbox.setChecked(False)
                 except Exception as e:
                     self.output_viewer.append(f"\n--- Could not open web browser: {e} ---")
 
@@ -663,7 +768,8 @@ class LlamaCppGUI(QWidget):
         self.output_viewer.verticalScrollBar().setValue(self.output_viewer.verticalScrollBar().maximum())
         if self.temp_batch_file and os.path.exists(self.temp_batch_file):
             try:
-                os.remove(self.temp_batch_file); self.temp_batch_file = ''
+                os.remove(self.temp_batch_file);
+                self.temp_batch_file = ''
             except OSError as e:
                 self.output_viewer.append(f"\n--- Warning: Could not delete temp file: {e} ---")
         self.set_status('error' if 'Loading...' in self.status_label.text() else 'unloaded')
@@ -687,19 +793,25 @@ class LlamaCppGUI(QWidget):
     def update_path_labels(self):
         error_style = "color: #F44336; font-weight: bold;"
         if not self.llamacpp_dir:
-            self.llamacpp_dir_label.setText('Llama.cpp Directory: Not Set'); self.llamacpp_dir_label.setStyleSheet("")
+            self.llamacpp_dir_label.setText('Llama.cpp Directory: Not Set');
+            self.llamacpp_dir_label.setStyleSheet("")
         elif not os.path.isdir(self.llamacpp_dir):
-            self.llamacpp_dir_label.setText('Llama.cpp Directory: NOT FOUND'); self.llamacpp_dir_label.setStyleSheet(
+            self.llamacpp_dir_label.setText('Llama.cpp Directory: NOT FOUND');
+            self.llamacpp_dir_label.setStyleSheet(
                 error_style)
         else:
             self.llamacpp_dir_label.setText(
-                f'Llama.cpp Directory: {self.llamacpp_dir}'); self.llamacpp_dir_label.setStyleSheet("")
+                f'Llama.cpp Directory: {self.llamacpp_dir}');
+            self.llamacpp_dir_label.setStyleSheet("")
         if not self.models_file:
-            self.models_file_label.setText('Models File: Not Set'); self.models_file_label.setStyleSheet("")
+            self.models_file_label.setText('Models File: Not Set');
+            self.models_file_label.setStyleSheet("")
         elif not os.path.isfile(self.models_file):
-            self.models_file_label.setText('Models File: NOT FOUND'); self.models_file_label.setStyleSheet(error_style)
+            self.models_file_label.setText('Models File: NOT FOUND');
+            self.models_file_label.setStyleSheet(error_style)
         else:
-            self.models_file_label.setText(f'Models File: {self.models_file}'); self.models_file_label.setStyleSheet("")
+            self.models_file_label.setText(f'Models File: {self.models_file}');
+            self.models_file_label.setStyleSheet("")
 
     def closeEvent(self, event):
         if self.is_dirty:
@@ -790,4 +902,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    
