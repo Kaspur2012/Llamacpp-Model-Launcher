@@ -1,5 +1,84 @@
 # parameters_db.py
 
+
+# --- NEW: Help documentation is now stored here and imported by the main app ---
+HELP_DOCUMENTATION = """
+## Llama.cpp Model Launcher: User Guide
+
+### 1. Introduction
+
+Welcome to the Llama.cpp Model Launcher! This application provides a clean, powerful, and user-friendly graphical interface (GUI) for the `llama-server.exe` tool from the Llama.cpp project.
+
+Its purpose is to replace the tedious and error-prone process of typing long commands into a terminal. With this launcher, you can manage, edit, delete, duplicate and run all your language models with the point-and-click simplicity of a modern desktop application.
+
+### 2. First-Time Setup
+
+Before you can launch a model, you need to tell the application where to find two key items. This is a one-time setup, and your choices will be saved for future sessions.
+
+1.  **Set the Llama.cpp Directory**:
+    *   Click the **Browse...** button next to the "Llama.cpp Directory" label.
+    *   Navigate to and select the folder that contains your `llama-server.exe` file.
+    *   The application will verify that `llama-server.exe` exists in the selected folder.
+
+2.  **Set the Models File**:
+    *   Click the **Browse...** button next to the "Models File" label.
+    *   Select the `.txt` file that contains your model launch commands.
+    *   **File Format**: This text file must be structured with a model name on one line, followed immediately by its full launch command on the next line. For example:
+        ```        Llama-3-8B-Instruct-Q6_K
+        llama-server.exe -m D:\\models\\Llama-3-8B-Instruct-Q6_K.gguf -c 4096 -ngl 99 -fa on
+
+        Mistral-7B-Instruct-v0.2-Q5_K_M
+        llama-server.exe -m D:\\models\\mistral-7b-instruct-v0.2.Q5_K_M.gguf -c 4096 -ngl 99
+        ```
+
+Once both paths are set, the **Model Selection** dropdown menu will automatically populate with the names from your text file.
+
+### 3. The Main Interface
+
+The application is divided into two main panels.
+
+#### Left Panel: Main Control & Display
+This is where you select and control the model server.
+
+*   **Model Selection Dropdown**: Choose the model configuration you wish to load.
+*   **Web UI Options**:
+    *   `Enable Web UI`: Keep this checked to run the standard web server. Unchecking it adds the `--no-webui` flag to the command.
+    *   `Auto-Open Web UI`: If checked, your web browser will automatically open to the server's page (`http://localhost:8080`) a single time after the model successfully loads.
+*   **Process Control Buttons**:
+    *   **Load Model**: Builds the final command from the editor and starts the `llama-server.exe` process.
+    *   **Unload Model**: Forcefully stops the server process.
+    *   **Exit**: Stops any running server and closes the application.
+*   **Status Indicator**: A colored dot gives you an at-a-glance view of the server's state:
+    *   **Red (Unloaded)**: The server is not running.
+    *   **Yellow (Loading...)**: The server is loading the model into memory.
+    *   **Green (Loaded)**: The model is successfully loaded and ready.
+    *   **Red (Error)**: The server process terminated unexpectedly.
+*   **Output / Commands / Help View**:
+    *   The main text area shows the **live output** from the server by default.
+    *   Click the **Commands** button to switch to the **Parameter Browser**. This interactive UI allows you to search for and discover all available Llama.cpp parameters. Each parameter has a description and an "Add" button to add it directly to your model's configuration.
+    *   Click the **Help** button to view this user guide at any time.
+    *   Click **Show Output** to return to the live log from either the Commands or Help view.
+
+#### Right Panel: Configuration Editor
+This is where you can view and modify all aspects of the selected model's configuration.
+
+*   **Model Name**: An editable field for the display name that appears in the dropdown.
+*   **Parameter Editor**: A dynamic list of all parameters for the selected command. Flags (like `--no-mmap`) are shown as **checkboxes**, and parameters with values (like `-c 4096`) are shown as **text fields**.
+*   **Add New Parameter**: Allows you to manually add any valid Llama.cpp parameter to the current configuration. For a guided experience, use the **Parameter Browser** on the left.
+*   **Action Buttons**:
+    *   **Add**: Prepares the editor for a new model configuration using a default template.
+    *   **Duplicate**: Creates a copy of the currently selected configuration for easy modification.
+    *   **Delete**: Deletes the currently selected model from your `.txt` file.
+    *   **Reset**: Discards any unsaved changes in the editor.
+    *   **Save to File**: Permanently saves all changes (name and parameters) to your `.txt` file.
+
+### 4. Common Issue
+
+**When I click "Load Model," nothing happens.**
+This almost always means the Llama.cpp Directory path is incorrect, often after updating Llama.cpp to a new version. Simply click the **Browse...** button and point the application to the new folder containing your updated `llama-server.exe`.
+"""
+
+
 # This file contains the structured database of all Llama.cpp parameters.
 # The 'options' for select types with numeric values have been converted
 # to a list of strings to ensure compatibility with the Python GUI application.
@@ -284,5 +363,6 @@ LLAMA_CPP_PARAMETERS = [
             {'name': 'FIM Qwen 30B Default', 'id': 'fim-qwen-30b-default', 'type': 'checkbox', 'default': False, 'description': 'Use default Qwen 3 Coder 30B A3B Instruct (note: can download weights from the internet)', 'prefix': '--fim-qwen-30b-default'},
         ]
     }
-
 ]
+
+

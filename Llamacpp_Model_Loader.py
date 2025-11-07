@@ -15,8 +15,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QProcess, Qt, QTimer
 from PyQt6.QtGui import QFont, QPalette, QColor, QIcon
 
-# Import the parameter database from the separate file
-from parameters_db import LLAMA_CPP_PARAMETERS
+# --- MODIFIED: Import both the parameters and the new help documentation ---
+from parameters_db import LLAMA_CPP_PARAMETERS, HELP_DOCUMENTATION
 
 
 class LlamaCppGUI(QWidget):
@@ -130,7 +130,6 @@ class LlamaCppGUI(QWidget):
         layout.addWidget(self.view_stack)
         self.update_auto_open_visibility()
 
-    # --- MODIFIED: Added a clear button to the search bar ---
     def create_parameter_browser(self):
         main_widget = QWidget()
         main_layout = QVBoxLayout(main_widget)
@@ -138,7 +137,6 @@ class LlamaCppGUI(QWidget):
 
         search_bar = QLineEdit()
         search_bar.setPlaceholderText("Search for a parameter...")
-        # This line adds the built-in clear button
         search_bar.setClearButtonEnabled(True)
         search_bar.textChanged.connect(self.filter_parameter_browser)
         main_layout.addWidget(search_bar)
@@ -339,25 +337,18 @@ class LlamaCppGUI(QWidget):
             self.load_and_display_documentation()
             self.set_view(2)
 
+    # --- MODIFIED: This method is now much simpler and loads from the imported variable ---
     def load_and_display_documentation(self):
-        if self.help_viewer.toPlainText(): return
-        if not self.models_file:
-            self.help_viewer.setMarkdown("### Error\nCannot load documentation: 'Models File' path is not set.");
-            return
-        commands_file_path = os.path.join(os.path.dirname(self.models_file), 'models_commands.txt')
-        if not os.path.exists(commands_file_path):
-            self.help_viewer.setMarkdown(f"### File Not Found\n`models_commands.txt` could not be found.");
-            return
-        try:
-            with open(commands_file_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-            doc_lines, in_doc_section = [], False
-            for line in lines:
-                if '-----Documentation-----' in line: in_doc_section = True; continue
-                if in_doc_section: doc_lines.append(line)
-            self.help_viewer.setMarkdown("".join(doc_lines) if doc_lines else "### No Documentation Found")
-        except Exception as e:
-            self.help_viewer.setMarkdown(f"### Error\nFailed to read file:\n`{e}`")
+        # This method now loads the help content directly from the imported variable.
+        if self.help_viewer.toPlainText():
+            return  # Already loaded, no need to do it again.
+
+        if HELP_DOCUMENTATION:
+            self.help_viewer.setMarkdown(HELP_DOCUMENTATION)
+        else:
+            # Fallback in case the variable is empty for some reason
+            self.help_viewer.setMarkdown(
+                "### Error\nHelp documentation could not be loaded from the internal database.")
 
     def model_selected(self, index):
         if index == -1 or index == self.previous_model_index: return
