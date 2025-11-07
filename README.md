@@ -48,6 +48,8 @@ models_commands.txt MUST be in the same directory as your Model file(eg. model_c
 ## Changes Log:
 Nov 6 2025:
 
+thanks to https://x.com/unmortan for the code/frameworks
+
 **✨ Features**
 *   **New Interactive Parameter Browser**:
     The "Commands" button now opens a powerful, interactive UI for exploring and adding Llama.cpp parameters, replacing the previous static text view.
