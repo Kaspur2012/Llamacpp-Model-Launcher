@@ -1,39 +1,69 @@
-# Llamacpp-Model-Launcher
-Its purpose is to replace the tedious and error-prone process of typing long commands into a terminal. With this launcher, you can manage, edit, delete, duplicate and run all your language models with the point-and-click simplicity of a modern desktop application. 
+Llamacpp-Model-Launcher
 
-Side panel allows you to remove/add/edit/duplicate model parameters and run them easily. 
+The Llamacpp-Model-Launcher is a desktop application designed to simplify the process of managing and running your language models. It replaces the need for typing lengthy and complex commands into a terminal with an intuitive, point-and-click interface. You can easily manage, edit, delete, duplicate, and run all your language models.
 
-Command button opens a powerful, interactive UI for exploring and adding Llama.cpp parameters.
+Please Note: This application was developed for Windows and has not been tested on other operating systems.
 
-Notice!!! This was built with Window in mind and have not tested at all on other OS.
+![alt text](https://github.com/Kaspur2012/Llamacpp-Model-Launcher/blob/main/Main_UI.PNG)
 
-![Main_UI](https://github.com/Kaspur2012/Llamacpp-Model-Launcher/blob/main/Main_UI.PNG)
+Features
+<details>
+<summary><strong>✅ Core Functionality & Model Management</strong></summary>
 
 
+Graphical Front-End: A robust and intuitive GUI for managing and launching llama-server.exe instances.
 
-## Changes Log:
-Nov 6 2025:
+One-Click Model Loading: Load and unload models with a single click, eliminating manual command-line work.
 
-thanks to https://x.com/unmortan for the code/frameworks
+Centralized Dashboard: Manage all your model configurations from a single, organized interface.
 
-https://www.reddit.com/r/LocalLLaMA/comments/1opx9k2/comment/nnf2gr9/?context=1
+Add, Duplicate, Delete: Easily create new configurations from a template, duplicate existing ones to experiment, or delete them safely with a confirmation prompt.
 
-**✨ Features**
-*   **New Interactive Parameter Browser**:
-    *   The "Commands" button now opens a powerful, interactive UI for exploring and adding Llama.cpp parameters, replacing the previous static text view.
-    *   Organized & Discoverable: Parameters are grouped into collapsible categories (e.g., "Sampling," "GPU," "Context") for easy navigation and discovery.
-    *   Live Search: Instantly filter all available parameters by name, description, or command-line flag (e.g., --top-k). The search bar also includes a clear button for convenience.
-    *   One-Click Add: Each parameter in the browser has its own "Add" button to instantly add it (with its value) to your currently selected model configuration in the Parameter Editor.
-    
-*   **📈 Improvements**
-    *   Improved Workflow: The UI now remains in the Parameter Browser after adding a parameter, allowing you to add multiple parameters in a single session without interruption.
-    *   External Parameter Database: The extensive list of Llama.cpp parameters has been moved to a separate parameters_db.py file, making the main application code significantly cleaner and easier to manage.
-    
-**🐛 Bug Fixes**
-*   Fixed a critical bug where deleting a parameter from a long, scrollable list (especially with duplicate parameter names like -ot) would remove the wrong entry.
-*   Resolved a startup issue where the Parameter Editor would be empty for the first model selected when the application launched.
-*   Fixed an issue where the --mmproj parameter incorrectly opened a directory browser instead of a file browser.
-*   Added a confirmation dialog for unsaved changes when exiting the application to prevent accidental data loss.
+Save to File: All changes are saved to your models.txt file, keeping your configurations portable and easy to back up.
+
+Reset Changes: Instantly discard any unsaved modifications and revert to the last saved state.
+
+</details>
+
+<details>
+<summary><strong>⚙️ Powerful Parameter Editing & Discovery</strong></summary>
+
+
+Interactive Parameter Browser: A built-in, searchable library of Llama.cpp parameters, complete with descriptions and organized into collapsible categories (e.g., Sampling, GPU, Context).
+
+One-Click Parameter Addition: Add parameters from the browser to your model with a single click.
+
+Live Search & Filtering: Instantly find parameters by name, description, or command-line flag (e.g., --top-k).
+
+Dynamic Parameter Editor: The editor automatically provides the right tool for each parameter, including text fields, checkboxes, and dropdown menus.
+
+Integrated File Browsers: Convenient "Browse..." buttons for path-based parameters like --model and --mmproj.
+
+Smart Duplicate Handling: The app intelligently handles parameters that can be used multiple times (like -ot) by asking for confirmation first.
+
+</details>
+
+<details>
+<summary><strong>🖥️ Process Management & User Experience</strong></summary>
+
+
+Responsive, Non-Blocking UI: The application remains fully responsive while models are loading or running.
+
+Real-Time Server Output: View the live, scrolling output from the llama-server.exe process directly within the app.
+
+Clear Status Indicator: A color-coded status indicator shows the server's state at a glance (Loaded, Unloaded, Loading, or Error).
+
+Auto-Open Web UI: Optionally, automatically launch the Llama.cpp web interface in your browser once the server is ready.
+
+Unsaved Changes Prompts: Prevents accidental data loss by prompting you to save changes before switching models or exiting.
+
+Persistent Path Configuration: Your Llama.cpp directory and models file paths are saved and loaded automatically on startup.
+
+Path Validation: The UI gives instant visual feedback if configured paths are invalid.
+
+Clean and Modern UI: A dark-themed, user-friendly interface designed for clarity and ease of use.
+
+</details>
 
 
 
