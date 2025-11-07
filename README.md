@@ -69,4 +69,7 @@ After the command completes, you will find your standalone `.exe` file inside a 
 
 
 ## File Structure
-parameters_db.py and models_commands.txt MUST be in the same directory as your Model file(eg. model_commands_short.txt) directory.
+*   If you run the code with Method 1:
+    parameters_db.py and models_commands.txt MUST be in the same directory as your Model file(eg. model_commands_short.txt) directory.
+*   If you run the code with Method 2:
+    models_commands.txt(help file pretty much) MUST be in the same directory as your Model file(eg. model_commands_short.txt) directory.
