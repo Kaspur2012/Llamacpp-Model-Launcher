@@ -11,17 +11,17 @@ Features
 <summary><strong>✅ Core Functionality & Model Management</strong></summary>
 
 
-Graphical Front-End: A robust and intuitive GUI for managing and launching llama-server.exe instances.
+*   Graphical Front-End: A robust and intuitive GUI for managing and launching llama-server.exe instances.
 
-One-Click Model Loading: Load and unload models with a single click, eliminating manual command-line work.
+*   One-Click Model Loading: Load and unload models with a single click, eliminating manual command-line work.
 
-Centralized Dashboard: Manage all your model configurations from a single, organized interface.
+*   Centralized Dashboard: Manage all your model configurations from a single, organized interface.
 
-Add, Duplicate, Delete: Easily create new configurations from a template, duplicate existing ones to experiment, or delete them safely with a confirmation prompt.
+*   Add, Duplicate, Delete: Easily create new configurations from a template, duplicate existing ones to experiment, or delete them safely with a confirmation prompt.
 
-Save to File: All changes are saved to your models.txt file, keeping your configurations portable and easy to back up.
+*   Save to File: All changes are saved to your models.txt file, keeping your configurations portable and easy to back up.
 
-Reset Changes: Instantly discard any unsaved modifications and revert to the last saved state.
+*   Reset Changes: Instantly discard any unsaved modifications and revert to the last saved state.
 
 </details>
 
@@ -29,17 +29,17 @@ Reset Changes: Instantly discard any unsaved modifications and revert to the las
 <summary><strong>⚙️ Powerful Parameter Editing & Discovery</strong></summary>
 
 
-Interactive Parameter Browser: A built-in, searchable library of Llama.cpp parameters, complete with descriptions and organized into collapsible categories (e.g., Sampling, GPU, Context).
+*   Interactive Parameter Browser: A built-in, searchable library of Llama.cpp parameters, complete with descriptions and organized into collapsible categories (e.g., Sampling, GPU, Context).
 
-One-Click Parameter Addition: Add parameters from the browser to your model with a single click.
+*   One-Click Parameter Addition: Add parameters from the browser to your model with a single click.
 
-Live Search & Filtering: Instantly find parameters by name, description, or command-line flag (e.g., --top-k).
+*   Live Search & Filtering: Instantly find parameters by name, description, or command-line flag (e.g., --top-k).
 
-Dynamic Parameter Editor: The editor automatically provides the right tool for each parameter, including text fields, checkboxes, and dropdown menus.
+*   Dynamic Parameter Editor: The editor automatically provides the right tool for each parameter, including text fields, checkboxes, and dropdown menus.
 
-Integrated File Browsers: Convenient "Browse..." buttons for path-based parameters like --model and --mmproj.
+*   Integrated File Browsers: Convenient "Browse..." buttons for path-based parameters like --model and --mmproj.
 
-Smart Duplicate Handling: The app intelligently handles parameters that can be used multiple times (like -ot) by asking for confirmation first.
+*   Smart Duplicate Handling: The app intelligently handles parameters that can be used multiple times (like -ot) by asking for confirmation first.
 
 </details>
 
@@ -47,21 +47,21 @@ Smart Duplicate Handling: The app intelligently handles parameters that can be u
 <summary><strong>🖥️ Process Management & User Experience</strong></summary>
 
 
-Responsive, Non-Blocking UI: The application remains fully responsive while models are loading or running.
+*   Responsive, Non-Blocking UI: The application remains fully responsive while models are loading or running.
 
-Real-Time Server Output: View the live, scrolling output from the llama-server.exe process directly within the app.
+*   Real-Time Server Output: View the live, scrolling output from the llama-server.exe process directly within the app.
 
-Clear Status Indicator: A color-coded status indicator shows the server's state at a glance (Loaded, Unloaded, Loading, or Error).
+*   Clear Status Indicator: A color-coded status indicator shows the server's state at a glance (Loaded, Unloaded, Loading, or Error).
 
-Auto-Open Web UI: Optionally, automatically launch the Llama.cpp web interface in your browser once the server is ready.
+*   Auto-Open Web UI: Optionally, automatically launch the Llama.cpp web interface in your browser once the server is ready.
 
-Unsaved Changes Prompts: Prevents accidental data loss by prompting you to save changes before switching models or exiting.
+*   Unsaved Changes Prompts: Prevents accidental data loss by prompting you to save changes before switching models or exiting.
 
-Persistent Path Configuration: Your Llama.cpp directory and models file paths are saved and loaded automatically on startup.
+*   Persistent Path Configuration: Your Llama.cpp directory and models file paths are saved and loaded automatically on startup.
 
-Path Validation: The UI gives instant visual feedback if configured paths are invalid.
+*   Path Validation: The UI gives instant visual feedback if configured paths are invalid.
 
-Clean and Modern UI: A dark-themed, user-friendly interface designed for clarity and ease of use.
+*   Clean and Modern UI: A dark-themed, user-friendly interface designed for clarity and ease of use.
 
 </details>
 
