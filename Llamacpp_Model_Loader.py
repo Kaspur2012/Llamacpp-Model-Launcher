@@ -131,77 +131,175 @@ class LlamaCppGUI(QWidget):
         self.update_auto_open_visibility()
 
     def create_parameter_browser(self):
+        style_sheet = {
+            "main_bg": "background-color: #2D323B;",
+            "search_bar": """
+                QLineEdit {
+                    background-color: #3C424C; border: 1px solid #505660;
+                    border-radius: 4px; padding: 5px 8px; font-size: 10pt;
+                }
+                QLineEdit:focus { border: 1px solid #4D90E2; }
+            """,
+            "scroll_area": "border: none;",
+            "group_box": """
+                QFrame {
+                    background-color: #353A44; border: 1px solid #40454E;
+                    border-radius: 5px; margin-bottom: 8px;
+                }
+            """,
+            "header_button_template": """
+                QPushButton {{
+                    background-color: #3C424C; color: #E0E0E0; border: none;
+                    padding: 8px 10px; text-align: left; font-weight: bold; font-size: 11pt;
+                    {radius}
+                }}
+                QPushButton:hover {{ background-color: #454B56; }}
+            """,
+            "param_frame": "QFrame { border: none; border-top: 1px solid #40454E; padding: 10px; }",
+            "param_name_label": "font-weight: bold; color: #D1D1D1; font-size: 10pt;",
+            "param_desc_label": "color: #A0A0A0; font-size: 9pt;",
+            "add_button": """
+                QPushButton {
+                    background-color: #4A85C9; color: white; border: none;
+                    border-radius: 4px; padding: 5px 12px; font-weight: bold;
+                }
+                QPushButton:hover { background-color: #5A95DA; }
+                QPushButton:pressed { background-color: #3A75B9; }
+            """,
+            "line_edit": """
+                QLineEdit {
+                    background-color: #252930; border: 1px solid #505660;
+                    border-radius: 4px; padding: 4px;
+                }
+                QLineEdit:focus { border: 1px solid #4D90E2; }
+            """,
+            "combo_box": """
+                QComboBox {
+                    background-color: #252930;
+                    border: 1px solid #505660;
+                    border-radius: 4px;
+                    padding: 4px;
+                    padding-left: 6px;
+                }
+                QComboBox:hover {
+                    border: 1px solid #60656F;
+                }
+                QComboBox:on {
+                    border: 1px solid #4D90E2;
+                }
+                QComboBox::drop-down {
+                    subcontrol-origin: padding;
+                    subcontrol-position: top right;
+                    width: 20px;
+                    border-left-width: 1px;
+                    border-left-color: #505660;
+                    border-left-style: solid;
+                    border-top-right-radius: 3px;
+                    border-bottom-right-radius: 3px;
+                }
+                QComboBox::down-arrow {
+                    width: 0; 
+                    height: 0; 
+                    border-left: 4px solid transparent;
+                    border-right: 4px solid transparent;
+                    border-top: 5px solid #E0E0E0;
+                    margin: 0 auto;
+                }
+                QComboBox QAbstractItemView {
+                    background-color: #3C424C;
+                    color: #E0E0E0;
+                    border: 1px solid #505660;
+                    selection-background-color: #4A85C9;
+                }
+            """
+        }
+
         main_widget = QWidget()
+        main_widget.setStyleSheet(style_sheet["main_bg"])
         main_layout = QVBoxLayout(main_widget)
-        main_layout.setContentsMargins(5, 5, 5, 5)
+        main_layout.setContentsMargins(10, 10, 10, 10);
+        main_layout.setSpacing(10)
 
         search_bar = QLineEdit()
         search_bar.setPlaceholderText("Search for a parameter...")
         search_bar.setClearButtonEnabled(True)
+        search_bar.setStyleSheet(style_sheet["search_bar"])
         search_bar.textChanged.connect(self.filter_parameter_browser)
         main_layout.addWidget(search_bar)
 
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet(style_sheet["scroll_area"])
         main_layout.addWidget(scroll_area)
 
         scroll_content = QWidget()
         self.browser_layout = QVBoxLayout(scroll_content)
         self.browser_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.browser_layout.setContentsMargins(0, 0, 5, 0);
+        self.browser_layout.setSpacing(0)
         scroll_area.setWidget(scroll_content)
 
         self.browser_param_rows.clear()
 
         for group in LLAMA_CPP_PARAMETERS:
             group_box = QFrame()
-            group_box.setFrameShape(QFrame.Shape.StyledPanel)
+            group_box.setStyleSheet(style_sheet["group_box"])
             group_layout = QVBoxLayout(group_box)
+            group_layout.setContentsMargins(0, 0, 0, 0);
+            group_layout.setSpacing(0)
 
-            header_button = QPushButton(f"▼  {group['name']}")
-            header_button.setStyleSheet("text-align: left; font-weight: bold; padding: 5px;")
+            header_button = QPushButton(f"►  {group['name']}")
+            header_button.setProperty("is_collapsible", True)
             group_layout.addWidget(header_button)
 
             content_widget = QWidget()
             content_layout = QVBoxLayout(content_widget)
-            content_layout.setContentsMargins(10, 0, 0, 0)
+            content_layout.setContentsMargins(0, 0, 0, 0);
+            content_layout.setSpacing(0)
 
             for param in group['parameters']:
                 param_frame = QFrame()
-                param_layout = QHBoxLayout(param_frame)
+                param_frame.setStyleSheet(style_sheet["param_frame"])
+                param_layout = QHBoxLayout(param_frame);
+                param_layout.setSpacing(15)
 
                 text_widget = QWidget()
-                text_layout = QVBoxLayout(text_widget)
-                text_layout.setSpacing(2)
+                text_layout = QVBoxLayout(text_widget);
+                text_layout.setSpacing(4)
                 name_label = QLabel(f"{param['name']} ({param['prefix']})")
-                name_label.setStyleSheet("font-weight: bold;")
+                name_label.setStyleSheet(style_sheet["param_name_label"])
                 desc_label = QLabel(param['description'])
                 desc_label.setWordWrap(True)
-                text_layout.addWidget(name_label)
+                desc_label.setStyleSheet(style_sheet["param_desc_label"])
+                text_layout.addWidget(name_label);
                 text_layout.addWidget(desc_label)
                 param_layout.addWidget(text_widget, 3)
 
                 input_widget = QWidget()
                 input_layout = QVBoxLayout(input_widget)
+                input_layout.setSpacing(5);
+                input_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
                 if param['type'] == 'checkbox':
                     param_input = QCheckBox()
                 elif param['type'] == 'select':
                     param_input = QComboBox()
                     param_input.addItems(param['options'])
+                    param_input.setStyleSheet(style_sheet["combo_box"])
+                    param_input.setMinimumWidth(120)
                 else:
                     param_input = QLineEdit(str(param['default']))
+                    param_input.setStyleSheet(style_sheet["line_edit"])
 
                 add_button = QPushButton("Add")
+                add_button.setStyleSheet(style_sheet["add_button"])
                 add_button.clicked.connect(
-                    lambda chk=False, p=param, inp=param_input: self.add_parameter_from_browser(p, inp)
-                )
+                    lambda chk=False, p=param, inp=param_input: self.add_parameter_from_browser(p, inp))
 
-                input_layout.addWidget(param_input)
+                input_layout.addWidget(param_input);
                 input_layout.addWidget(add_button)
                 param_layout.addWidget(input_widget, 1)
-
                 content_layout.addWidget(param_frame)
-
                 self.browser_param_rows.append({'frame': param_frame, 'group': group_box, 'data': param})
 
             content_widget.setLayout(content_layout)
@@ -209,20 +307,27 @@ class LlamaCppGUI(QWidget):
             self.browser_layout.addWidget(group_box)
 
             header_button.clicked.connect(
-                lambda chk=False, w=content_widget, b=header_button: self.toggle_group_box(w, b))
+                lambda chk=False, w=content_widget, b=header_button,
+                       s=style_sheet["header_button_template"]: self.toggle_group_box(w, b, s)
+            )
 
             content_widget.setVisible(False)
-            header_button.setText(f"►  {group['name']}")
+            header_button.setStyleSheet(style_sheet["header_button_template"].format(radius="border-radius: 4px;"))
 
         return main_widget
 
-    def toggle_group_box(self, widget, button):
+    def toggle_group_box(self, widget, button, style_template):
         is_visible = widget.isVisible()
         widget.setVisible(not is_visible)
+
         if is_visible:
             button.setText(button.text().replace("▼", "►"))
+            radius_style = "border-radius: 4px;"
         else:
             button.setText(button.text().replace("►", "▼"))
+            radius_style = "border-top-left-radius: 4px; border-top-right-radius: 4px;"
+
+        button.setStyleSheet(style_template.format(radius=radius_style))
 
     def add_parameter_from_browser(self, param_data, input_widget):
         param_prefix = param_data['prefix']
@@ -337,16 +442,13 @@ class LlamaCppGUI(QWidget):
             self.load_and_display_documentation()
             self.set_view(2)
 
-    # --- MODIFIED: This method is now much simpler and loads from the imported variable ---
     def load_and_display_documentation(self):
-        # This method now loads the help content directly from the imported variable.
         if self.help_viewer.toPlainText():
-            return  # Already loaded, no need to do it again.
+            return
 
         if HELP_DOCUMENTATION:
             self.help_viewer.setMarkdown(HELP_DOCUMENTATION)
         else:
-            # Fallback in case the variable is empty for some reason
             self.help_viewer.setMarkdown(
                 "### Error\nHelp documentation could not be loaded from the internal database.")
 
@@ -742,7 +844,12 @@ class LlamaCppGUI(QWidget):
             self.set_status('loaded')
             if self.open_on_load_checkbox.isChecked():
                 try:
-                    webbrowser.open('http://localhost:8080/');
+                    host, port = self.get_server_address_from_command()
+                    url_to_open = f'http://{host}:{port}/'
+
+                    webbrowser.open(url_to_open)
+                    self.output_viewer.append(f"\n--- Opening Web UI at: {url_to_open} ---")
+
                     self.open_on_load_checkbox.setChecked(False)
                 except Exception as e:
                     self.output_viewer.append(f"\n--- Could not open web browser: {e} ---")
@@ -819,6 +926,28 @@ class LlamaCppGUI(QWidget):
 
         self.unload_model()
         event.accept()
+
+    def get_server_address_from_command(self):
+        host = 'localhost'
+        port = '8080'
+
+        command_str = self.reconstruct_command()
+        args = shlex.split(command_str, posix=False)
+
+        try:
+            if '--host' in args:
+                host_index = args.index('--host') + 1
+                if host_index < len(args):
+                    host = 'localhost' if args[host_index] == '127.0.0.1' else args[host_index]
+
+            if '--port' in args:
+                port_index = args.index('--port') + 1
+                if port_index < len(args):
+                    port = args[port_index]
+        except (ValueError, IndexError):
+            pass
+
+        return host, port
 
     def browse_for_model_file(self, line_edit_widget):
         file, _ = QFileDialog.getOpenFileName(self, "Select Model File", "", "GGUF Files (*.gguf);;All Files (*)")
