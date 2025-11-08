@@ -29,7 +29,10 @@ Features
 <summary><strong>⚙️ Powerful Parameter Editing & Discovery</strong></summary>
 
 
+
 *   Interactive Parameter Browser: A built-in, searchable library of Llama.cpp parameters, complete with descriptions and organized into collapsible categories (e.g., Sampling, GPU, Context).
+	*   thanks https://x.com/unmortan for the info/code/design inspiration
+	*   https://www.reddit.com/r/LocalLLaMA/comments/1opx9k2/comment/nnf2gr9/?context=1
 
 *   One-Click Parameter Addition: Add parameters from the browser to your model with a single click.
 
