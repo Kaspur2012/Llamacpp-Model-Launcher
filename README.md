@@ -113,6 +113,33 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 ## File Structure
 *   all files must in the same directory.
 
-## Roadmap
-*   Model parameter autotuning
+## Experimental Features:
+*   Very Early Version of Model parameter autotuning for Window and CUDA(I only have nvidia gpus and using window atm)
+
+## 🚀 The Tuning Wizard is Here!
+
+This is a major feature release that introduces the **Tuning Wizard**, a powerful tool designed to take the guesswork out of configuring your models. It automatically analyzes your system and the selected model to find the optimal performance settings for *your specific setup*.
+
+No more manually tweaking `ngl`, `tensor-split`, or `ncmoe` values! The wizard finds the configuration that gives you the highest tokens per second (t/s) without running out of memory.
+
+### ✨ Key Features of the Tuning Wizard
+
+*   **System Analysis:** Scans your CPU, system RAM, and the available VRAM on all detected NVIDIA GPUs.
+*   **Model Inspection:** Determines the model's file size and architecture (Dense vs. Mixture of Experts) to choose the right strategy.
+*   **Automated Benchmarking:** Intelligently tests different offloading configurations by loading the model, sending real inference requests, and measuring the performance.
+*   **Smart Strategy Selection:** Automatically uses different tuning algorithms for single-GPU, multi-GPU, and Mixture of Experts (MoE) models to handle their unique requirements.
+*   **Optimal Configuration:** Identifies the settings that provide the best performance and presents them to you at the end of the process.
+
+### 💡 How to Use the Tuning Wizard
+
+1.  **Select Your Model:** Choose the model you want to tune from the main dropdown menu.
+2.  **Verify Model Path:** Make sure the `-m` (or `--model`) parameter on the right-hand editor points to the correct `.gguf` file. The wizard needs this to analyze the model.
+3.  **Click "Tune Model":** Press the bold **Tune Model** button on the main control bar.
+4.  **Watch the Process:** The wizard will begin its analysis and benchmarking. All steps, tests, and results are printed in real-time to the output window.
+    *   *Note: This process can take several minutes as it involves loading and unloading your model multiple times to find the best settings.*
+5.  **Apply & Save:** When the wizard is finished, it will ask if you want to apply the optimal parameters it found. If you accept, the editor will be updated. **Don't forget to click "Save to File"** to make the changes permanent
+
+### All files are under Experimental folder.
+
+  
 
