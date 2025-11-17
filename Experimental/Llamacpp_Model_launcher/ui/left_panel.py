@@ -1,18 +1,17 @@
-# ui/left_panel.py
+# Full updated file for clarity, though changes are minimal
+# Llamacpp_Model_launcher/ui/left_panel.py
 
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
                              QComboBox, QCheckBox, QStackedWidget, QTextEdit)
 from PyQt6.QtGui import QFont
-# --- FIX: Added the missing import for pyqtSignal ---
 from PyQt6.QtCore import pyqtSignal
-# ---------------------------------------------------
-from parameter_browser import ParameterBrowser
+from .parameter_browser import ParameterBrowser
+from .summary_panel import SummaryPanel
 from Llamacpp_Model_launcher.parameters_db import HELP_DOCUMENTATION
 
 
 class LeftPanel(QWidget):
     """Manages the main control and display area of the application."""
-    # Signals for user actions
     dir_browse_clicked = pyqtSignal()
     file_browse_clicked = pyqtSignal()
     model_selected = pyqtSignal(int)
@@ -21,35 +20,34 @@ class LeftPanel(QWidget):
     tune_model_clicked = pyqtSignal()
     exit_clicked = pyqtSignal()
     webui_toggled = pyqtSignal(bool)
+    run_tuning_from_summary = pyqtSignal(dict)
+    tuning_cancelled = pyqtSignal()  # New signal
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._showing_commands = False
         self._showing_help = False
+        self._showing_summary = False
         self._setup_ui()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
 
-        # --- Top Path Selection ---
         path_layout = QHBoxLayout()
         self.llamacpp_dir_label = QLabel('Llama.cpp Directory: Not Set')
         self.llamacpp_dir_label.setWordWrap(True)
         browse_dir_button = QPushButton('Browse...')
         browse_dir_button.clicked.connect(self.dir_browse_clicked)
-
         self.models_file_label = QLabel('Models File: Not Set')
         self.models_file_label.setWordWrap(True)
         browse_file_button = QPushButton('Browse...')
         browse_file_button.clicked.connect(self.file_browse_clicked)
-
         path_layout.addWidget(self.llamacpp_dir_label, 1)
         path_layout.addWidget(browse_dir_button)
         path_layout.addWidget(self.models_file_label, 1)
         path_layout.addWidget(browse_file_button)
         layout.addLayout(path_layout)
 
-        # --- Model Dropdown and Options ---
         self.model_dropdown = QComboBox()
         self.model_dropdown.currentIndexChanged.connect(self.model_selected)
         layout.addWidget(self.model_dropdown)
@@ -65,12 +63,12 @@ class LeftPanel(QWidget):
         options_layout.addStretch()
         layout.addLayout(options_layout)
 
-        # --- Process Controls ---
         controls_layout = QHBoxLayout()
         self.load_button = QPushButton('Load Model')
         self.unload_button = QPushButton('Unload Model')
         self.tuning_wizard_button = QPushButton("Tune Model")
         self.tuning_wizard_button.setStyleSheet("font-weight: bold;")
+        self.system_button = QPushButton('System')
         self.commands_button = QPushButton('Commands')
         self.help_button = QPushButton('Help')
         self.exit_button = QPushButton('Exit')
@@ -79,6 +77,7 @@ class LeftPanel(QWidget):
         self.unload_button.clicked.connect(self.unload_model_clicked)
         self.tuning_wizard_button.clicked.connect(self.tune_model_clicked)
         self.exit_button.clicked.connect(self.exit_clicked)
+        self.system_button.clicked.connect(self._toggle_summary_view)
         self.commands_button.clicked.connect(self._toggle_commands_view)
         self.help_button.clicked.connect(self._toggle_help_view)
 
@@ -92,33 +91,46 @@ class LeftPanel(QWidget):
         controls_layout.addWidget(self.status_label)
         controls_layout.addStretch(1)
         controls_layout.addWidget(self.tuning_wizard_button)
+        controls_layout.addWidget(self.system_button)
         controls_layout.addWidget(self.commands_button)
         controls_layout.addWidget(self.help_button)
         controls_layout.addWidget(self.exit_button)
         layout.addLayout(controls_layout)
 
-        # --- Main View Stack ---
         self.view_stack = QStackedWidget()
         self.output_viewer = QTextEdit()
         self.output_viewer.setReadOnly(True)
         self.output_viewer.setFont(QFont('Courier', 10))
-
-        self.parameter_browser = ParameterBrowser()  # Instantiate child widget
-
+        self.parameter_browser = ParameterBrowser()
         self.help_viewer = QTextEdit()
         self.help_viewer.setReadOnly(True)
+        self.summary_viewer = SummaryPanel()
+        self.summary_viewer.run_tuning.connect(self.run_tuning_from_summary)
+        self.summary_viewer.tuning_cancelled.connect(self.tuning_cancelled.emit)  # Connect new signal
 
-        self.view_stack.addWidget(self.output_viewer)
-        self.view_stack.addWidget(self.parameter_browser)
-        self.view_stack.addWidget(self.help_viewer)
+        self.view_stack.addWidget(self.output_viewer)  # Index 0
+        self.view_stack.addWidget(self.parameter_browser)  # Index 1
+        self.view_stack.addWidget(self.help_viewer)  # Index 2
+        self.view_stack.addWidget(self.summary_viewer)  # Index 3
         layout.addWidget(self.view_stack)
 
     def _set_view(self, index):
         self.view_stack.setCurrentIndex(index)
         self._showing_commands = (index == 1)
         self._showing_help = (index == 2)
+        self._showing_summary = (index == 3)
         self.commands_button.setText("Show Output" if self._showing_commands else "Commands")
         self.help_button.setText("Show Output" if self._showing_help else "Help")
+        self.system_button.setText("Show Output" if self._showing_summary else "System")
+
+    def _toggle_summary_view(self):
+        self._set_view(0 if self._showing_summary else 3)
+
+    def show_summary_view(self):
+        self._set_view(3)
+
+    def display_summary(self, data):
+        self.summary_viewer.populate(data)
 
     def _toggle_commands_view(self):
         self._set_view(0 if self._showing_commands else 1)
@@ -137,30 +149,22 @@ class LeftPanel(QWidget):
         else:
             self.help_viewer.setMarkdown("### Error\nHelp documentation could not be loaded.")
 
-    # --- Public methods for the main window to call ---
-
     def update_path_labels(self, dir_path, models_path, dir_valid, models_valid):
         error_style = "color: #F44336; font-weight: bold;"
-
         if not dir_path:
-            self.llamacpp_dir_label.setText('Llama.cpp Directory: Not Set')
-            self.llamacpp_dir_label.setStyleSheet("")
+            self.llamacpp_dir_label.setText('Llama.cpp Directory: Not Set'); self.llamacpp_dir_label.setStyleSheet("")
         elif not dir_valid:
-            self.llamacpp_dir_label.setText('Llama.cpp Directory: NOT FOUND')
-            self.llamacpp_dir_label.setStyleSheet(error_style)
+            self.llamacpp_dir_label.setText('Llama.cpp Directory: NOT FOUND'); self.llamacpp_dir_label.setStyleSheet(
+                error_style)
         else:
-            self.llamacpp_dir_label.setText(f'Llama.cpp Directory: {dir_path}')
-            self.llamacpp_dir_label.setStyleSheet("")
-
+            self.llamacpp_dir_label.setText(f'Llama.cpp Directory: {dir_path}'); self.llamacpp_dir_label.setStyleSheet(
+                "")
         if not models_path:
-            self.models_file_label.setText('Models File: Not Set')
-            self.models_file_label.setStyleSheet("")
+            self.models_file_label.setText('Models File: Not Set'); self.models_file_label.setStyleSheet("")
         elif not models_valid:
-            self.models_file_label.setText('Models File: NOT FOUND')
-            self.models_file_label.setStyleSheet(error_style)
+            self.models_file_label.setText('Models File: NOT FOUND'); self.models_file_label.setStyleSheet(error_style)
         else:
-            self.models_file_label.setText(f'Models File: {models_path}')
-            self.models_file_label.setStyleSheet("")
+            self.models_file_label.setText(f'Models File: {models_path}'); self.models_file_label.setStyleSheet("")
 
     def set_status(self, status_enum):
         self.status_label.setText(status_enum.label)
@@ -175,8 +179,7 @@ class LeftPanel(QWidget):
     def populate_dropdown(self, model_names):
         self.model_dropdown.blockSignals(True)
         self.model_dropdown.clear()
-        if model_names:
-            self.model_dropdown.addItems(model_names)
+        if model_names: self.model_dropdown.addItems(model_names)
         self.model_dropdown.blockSignals(False)
 
     def set_dropdown_index(self, index):

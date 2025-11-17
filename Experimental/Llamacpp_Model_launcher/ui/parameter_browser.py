@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLineEdit, QScrollArea, QFram
                              QPushButton, QHBoxLayout, QLabel, QCheckBox, QComboBox)
 from PyQt6.QtCore import Qt, pyqtSignal
 from Llamacpp_Model_launcher.parameters_db import LLAMA_CPP_PARAMETERS
-from styles import PARAMETER_BROWSER_STYLES
+from .styles import PARAMETER_BROWSER_STYLES
 
 
 class ParameterBrowser(QWidget):

@@ -1,3 +1,5 @@
+# C:\Users\Anhtien\PycharmProjects\Online_research\run_app.py
+
 import sys
 from PyQt6.QtWidgets import QApplication
 
