@@ -116,11 +116,17 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 ## Experimental Features:
 *   Very Early Version of Model parameter autotuning for Window and CUDA(I only have nvidia gpus and using window atm)
 
+##   Change Log
+*   11/17/2025 - New ui for Tuning Model, display system and model info alongside of Tuning Configuration and recommended parameters
+*   Tuning process now auto adjust context value alongside with tensor split and layer offload.
+*   User has a choice to offload stragety(Single gpu only, multi gpu(vram only), or multi-gpu + cpu offload)
+*   User also has option to maximize context size after offload. Which if you have left over vram, it will fill them with context up to max context. This option will work with single and multi gpu. currently testing multi-gpu+cpu offload but there some issues..
+
 ## 🚀 The Tuning Wizard is Here!
 
 This is a major feature release that introduces the **Tuning Wizard**, a powerful tool designed to take the guesswork out of configuring your models. It automatically analyzes your system and the selected model to find the optimal performance settings for *your specific setup*.
 
-No more manually tweaking `ngl`, `tensor-split`, or `ncmoe` values! The wizard finds the configuration that gives you the highest tokens per second (t/s) without running out of memory.
+No more manually tweaking `context`, `ngl`, `tensor-split`, or `ncmoe` values! The wizard finds the configuration that gives you the highest tokens per second (t/s) without running out of memory.
 
 ### ✨ Key Features of the Tuning Wizard
 
