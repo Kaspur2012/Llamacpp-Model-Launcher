@@ -173,12 +173,10 @@ class SummaryPanel(QWidget):
         layout.addWidget(self.offload_multi_vram_radio)
         layout.addWidget(self.offload_multi_cpu_radio)
 
-        # --- NEW: Core Optimizations Section ---
         layout.addWidget(
             create_heading("Core Optimizations", "Toggle recommended base parameters for the tuning process."))
         self.optimizations_layout = QVBoxLayout()
         layout.addLayout(self.optimizations_layout)
-        # --- End New ---
 
         layout.addWidget(create_heading("Additional Optimizations"))
         self.maximize_context_checkbox = QCheckBox("Maximize Context Size After Offload")
@@ -213,6 +211,7 @@ class SummaryPanel(QWidget):
         add_row(self.system_summary_layout, "CPU Cores", f"{data.get('cpu_physical_cores', 'N/A')} Physical")
 
         gpus = data.get("gpus", [])
+        primary_gpu = None
         if gpus:
             while self.gpu_selection_layout.count():
                 child = self.gpu_selection_layout.takeAt(0)
@@ -222,6 +221,8 @@ class SummaryPanel(QWidget):
             recommended_gpu_id = max(gpus, key=lambda gpu: gpu.get('vram', {}).get('total_gb', 0))['id']
 
             for i, gpu in enumerate(gpus):
+                if gpu['id'] == recommended_gpu_id:
+                    primary_gpu = gpu
                 vram = gpu.get('vram', {})
                 vram_str = f"({vram.get('used_gb', 0.0):.1f}/{vram.get('total_gb', 0.0):.1f} GB VRAM)"
                 add_row(self.system_summary_layout, f"GPU {gpu['id']}", f"{gpu['name']} {vram_str}")
@@ -235,40 +236,58 @@ class SummaryPanel(QWidget):
                 self.gpu_button_group.addButton(radio_button)
                 self.gpu_selection_layout.addWidget(radio_button)
 
+        if not primary_gpu and gpus:
+            primary_gpu = gpus[0]  # Fallback
+
         add_row(self.model_summary_layout, "Model Architecture", data.get('model_architecture', 'N/A'))
         add_row(self.model_summary_layout, "Model Size", f"{data.get('model_size_gb', 'N/A')} GB")
         add_row(self.model_summary_layout, "Model Layers", data.get('model_layers', 'N/A'))
         add_row(self.model_summary_layout, "Model Max Context", f"{data.get('model_max_context', 'N/A'):,}")
 
+        # --- REVISED LOGIC for enabling/disabling and recommending strategies ---
         VRAM_BUFFER_GB = 1.5
         model_size = data.get('model_size_gb', 999)
         num_gpus = len(gpus)
-        can_fit_single_gpu, can_fit_multi_vram = False, False
 
-        if num_gpus > 0:
-            primary_gpu_vram = gpus[0].get('vram', {}).get('free_gb', 0)
-            if (model_size + VRAM_BUFFER_GB) < primary_gpu_vram:
-                can_fit_single_gpu = True
+        can_fit_primary_gpu_only = False
+        if primary_gpu:
+            primary_gpu_free_vram = primary_gpu.get('vram', {}).get('free_gb', 0)
+            if (model_size + VRAM_BUFFER_GB) < primary_gpu_free_vram:
+                can_fit_primary_gpu_only = True
+
+        can_fit_multi_vram = False
         if num_gpus > 1:
             total_free_vram = sum(g.get('vram', {}).get('free_gb', 0) for g in gpus)
             if (model_size + VRAM_BUFFER_GB) < total_free_vram:
                 can_fit_multi_vram = True
 
-        self.offload_single_gpu_radio.setEnabled(can_fit_single_gpu)
-        self.offload_multi_vram_radio.setEnabled(can_fit_multi_vram)
-        self.offload_multi_cpu_radio.setEnabled(num_gpus > 0)
-
-        if can_fit_multi_vram:
-            self.offload_multi_vram_radio.setChecked(True)
-        elif can_fit_single_gpu:
-            self.offload_single_gpu_radio.setChecked(True)
+        # Reset labels and enable/disable options
+        self.offload_single_gpu_radio.setText("Single GPU Only")
+        self.offload_multi_vram_radio.setText("Multi-GPU (VRAM Only)")
+        if num_gpus <= 1:
+            self.offload_multi_cpu_radio.setText("Single GPU with CPU Offload")
         else:
+            self.offload_multi_cpu_radio.setText("Multi-GPU with CPU Offload")
+
+        self.offload_single_gpu_radio.setEnabled(can_fit_primary_gpu_only)
+        self.offload_multi_vram_radio.setEnabled(can_fit_multi_vram)
+        self.offload_multi_cpu_radio.setEnabled(True)  # Always enabled as a fallback
+
+        # Apply recommendations based on the corrected priority
+        if can_fit_primary_gpu_only:
+            self.offload_single_gpu_radio.setText("Single GPU Only (Recommended)")
+            self.offload_single_gpu_radio.setChecked(True)
+        elif can_fit_multi_vram:
+            self.offload_multi_vram_radio.setText("Multi-GPU (VRAM Only) (Recommended)")
+            self.offload_multi_vram_radio.setChecked(True)
+        else:
+            current_text = self.offload_multi_cpu_radio.text()
+            self.offload_multi_cpu_radio.setText(f"{current_text} (Recommended)")
             self.offload_multi_cpu_radio.setChecked(True)
 
         self.goal_perf_radio.setChecked(True)
         self.maximize_context_checkbox.setChecked(True)
 
-        # --- NEW: Populate Core Optimizations ---
         while self.optimizations_layout.count():
             child = self.optimizations_layout.takeAt(0)
             if child.widget():
@@ -286,7 +305,6 @@ class SummaryPanel(QWidget):
         offload_map = {1: 'single_gpu', 2: 'multi_vram', 3: 'multi_cpu'}
         selected_gpu_button = self.gpu_button_group.checkedButton()
 
-        # --- NEW: Gather selected optimizations ---
         selected_optimizations = {}
         for i in range(self.optimizations_layout.count()):
             checkbox = self.optimizations_layout.itemAt(i).widget()
@@ -300,6 +318,6 @@ class SummaryPanel(QWidget):
             'offload_strategy': offload_map.get(self.offload_group.checkedId(), 'single_gpu'),
             'maximize_context': self.maximize_context_checkbox.isChecked(),
             'primary_gpu_id': selected_gpu_button.property("gpu_id") if selected_gpu_button else 0,
-            'selected_optimizations': selected_optimizations  # Add the new data
+            'selected_optimizations': selected_optimizations
         }
         self.run_tuning.emit(choices)
