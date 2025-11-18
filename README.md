@@ -131,12 +131,6 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 </details>
 
 
-## File Structure
-*   all files must in the same directory.
-
-## Experimental Features:
-*   Very Early Version of Model parameter autotuning for Window and CUDA(I only have nvidia gpus and using window atm)
-
 ##   Change Log
 
 *   11/17/2025 - 
@@ -156,29 +150,39 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 The Llama.cpp Model Launcher is a powerful tool designed to automate and simplify the process of finding optimal settings for your models. However, like any software, it has boundaries and design considerations. Please review these known limitations to understand the wizard's current behavior and whether it's the right fit for your specific hardware and goals.
 
-1. Understanding the "CPU Offload" Strategies
+#### **1. Understanding the "CPU Offload" Strategies**
+
 This is the most important nuance in the wizard's current logic. You might select a "with CPU Offload" strategy with the goal of maximizing your context window by using system RAM, even at the cost of speed.
-However, the wizard's primary goal is always to maximize performance (tokens/second) first.
+
+However, the wizard's primary goal is **always to maximize performance (tokens/second) first.**
+
 Here’s how it works:
-The wizard first finds the absolute maximum number of model layers (-ngl) that can fit into your GPU VRAM while remaining stable.
-It then takes that configuration and finds the largest context size (-c) that can fit within that VRAM-only limit.
-What this means for you: If your model and a basic context window can fit entirely into your GPU's VRAM, the wizard will not intentionally offload layers to the CPU to enable an even larger context size. It prioritizes the speed gain from keeping everything in VRAM.
-Example: You have a 30B model and a GPU with enough VRAM to hold all of its layers. You select the "Multi-GPU with CPU Offload" strategy, hoping to get a 128k context. The wizard will instead determine that a full GPU offload is possible and will find the maximum context that fits in VRAM (e.g., 32k), ignoring the CPU offload part of your request because it wasn't needed for the initial load.
+1.  The wizard first finds the absolute maximum number of model layers (`-ngl`) that can fit into your GPU VRAM while remaining stable.
+2.  It then takes that configuration and finds the largest context size (`-c`) that can fit within that **VRAM-only limit.**
+
+**What this means for you:** If your model and a basic context window can fit entirely into your GPU's VRAM, the wizard **will not** intentionally offload layers to the CPU to enable an even larger context size. It prioritizes the speed gain from keeping everything in VRAM.
+
+*   **Example:** You have a 30B model and a GPU with enough VRAM to hold all of its layers. You select the "Multi-GPU with CPU Offload" strategy, hoping to get a 128k context. The wizard will instead determine that a full GPU offload is possible and will find the maximum context that fits in VRAM (e.g., 32k), ignoring the CPU offload part of your request because it wasn't needed for the initial load.
+
 This is a deliberate design choice to favor speed, but we recognize that some users prioritize context length above all else. Future versions may include a dedicated "Context First" tuning mode.
 
-2. Windows-Only Support
-The application was developed and tested exclusively on the Windows operating system. It relies on Windows-specific APIs and command-line behavior (like .bat files for execution and taskkill for process management). It is not expected to work on macOS or Linux without significant modifications.
+#### **2. Windows-Only Support**
 
-3. NVIDIA GPU Required
-All hardware analysis, VRAM measurement, and offloading logic are built around NVIDIA's CUDA platform and its associated libraries (pynvml). The application has no code for detecting or utilizing AMD or Intel GPUs, and they are not supported.
+The application was developed and tested exclusively on the **Windows operating system**. It relies on Windows-specific APIs and command-line behavior (like `.bat` files for execution and `taskkill` for process management). It is not expected to work on macOS or Linux without significant modifications.
 
-4. Hardware Testing Scope
-Primary Testbed: The majority of testing was performed on a system with a dual NVIDIA GPU setup.
-Single GPU: The "Single GPU" strategies are considered stable and are expected to work reliably.
-3+ GPUs: Configurations with three or more GPUs have not been tested and may produce unexpected results with the tensor split (-ts) logic.
+#### **3. NVIDIA GPU Required**
 
-5. Limited Testing on Very Large Models (>70B)
-The development and testing system is equipped with 32 GB of DDR4 RAM. This is sufficient for tuning models up to the 70B class, which often require partial CPU offloading. However, extremely large models (>100B) that would be almost entirely reliant on system RAM have not been thoroughly validated. The wizard's dynamic timeouts and memory calculations may not be perfectly calibrated for the performance characteristics of these huge models.
+All hardware analysis, VRAM measurement, and offloading logic are built around **NVIDIA's CUDA platform** and its associated libraries (`pynvml`). The application has no code for detecting or utilizing AMD or Intel GPUs, and they are not supported.
+
+#### **4. Hardware Testing Scope**
+
+*   **Primary Testbed:** The majority of testing was performed on a system with a **dual NVIDIA GPU setup**.
+*   **Single GPU:** The "Single GPU" strategies are considered stable and are expected to work reliably.
+*   **3+ GPUs:** Configurations with three or more GPUs have not been tested and may produce unexpected results with the tensor split (`-ts`) logic.
+
+#### **5. Limited Testing on Very Large Models (>70B)**
+
+The development and testing system is equipped with **32 GB of DDR4 RAM**. This is sufficient for tuning models up to the 70B class, which often require partial CPU offloading. However, extremely large models (>100B) that would be almost entirely reliant on system RAM have not been thoroughly validated. The wizard's dynamic timeouts and memory calculations may not be perfectly calibrated for the performance characteristics of these huge models.
 
 </details>
 
