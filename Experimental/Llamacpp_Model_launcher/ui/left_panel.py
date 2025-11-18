@@ -18,16 +18,18 @@ class LeftPanel(QWidget):
     load_model_clicked = pyqtSignal()
     unload_model_clicked = pyqtSignal()
     tune_model_clicked = pyqtSignal()
+    tune_model_cancelled = pyqtSignal()  # NEW signal
     exit_clicked = pyqtSignal()
     webui_toggled = pyqtSignal(bool)
     run_tuning_from_summary = pyqtSignal(dict)
-    tuning_cancelled = pyqtSignal()  # New signal
+    tuning_cancelled = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._showing_commands = False
         self._showing_help = False
         self._showing_summary = False
+        self._is_tuning = False  # NEW state variable
         self._setup_ui()
 
     def _setup_ui(self):
@@ -75,7 +77,7 @@ class LeftPanel(QWidget):
 
         self.load_button.clicked.connect(self.load_model_clicked)
         self.unload_button.clicked.connect(self.unload_model_clicked)
-        self.tuning_wizard_button.clicked.connect(self.tune_model_clicked)
+        self.tuning_wizard_button.clicked.connect(self._on_tune_button_clicked)  # MODIFIED connection
         self.exit_button.clicked.connect(self.exit_clicked)
         self.system_button.clicked.connect(self._toggle_summary_view)
         self.commands_button.clicked.connect(self._toggle_commands_view)
@@ -106,13 +108,34 @@ class LeftPanel(QWidget):
         self.help_viewer.setReadOnly(True)
         self.summary_viewer = SummaryPanel()
         self.summary_viewer.run_tuning.connect(self.run_tuning_from_summary)
-        self.summary_viewer.tuning_cancelled.connect(self.tuning_cancelled.emit)  # Connect new signal
+        self.summary_viewer.tuning_cancelled.connect(self.tuning_cancelled.emit)
 
         self.view_stack.addWidget(self.output_viewer)  # Index 0
         self.view_stack.addWidget(self.parameter_browser)  # Index 1
         self.view_stack.addWidget(self.help_viewer)  # Index 2
         self.view_stack.addWidget(self.summary_viewer)  # Index 3
         layout.addWidget(self.view_stack)
+
+    # NEW: Method to handle the button's context-aware click
+    def _on_tune_button_clicked(self):
+        if self._is_tuning:
+            self.tune_model_cancelled.emit()
+        else:
+            self.tune_model_clicked.emit()
+
+    # NEW: Method to transform the button into a cancel button and back
+    def set_tuning_mode(self, is_tuning):
+        self._is_tuning = is_tuning
+        if is_tuning:
+            self.tuning_wizard_button.setText("Cancel Tuning")
+            self.tuning_wizard_button.setStyleSheet("background-color: #C62828; color: white; font-weight: bold;")
+            self.tuning_wizard_button.setEnabled(True)  # Cancel must always be enabled
+            self.load_button.setEnabled(False)
+            self.unload_button.setEnabled(False)
+        else:
+            self.tuning_wizard_button.setText("Tune Model")
+            self.tuning_wizard_button.setStyleSheet("font-weight: bold;")
+            # The regular enabled state is restored by update_button_states
 
     def _set_view(self, index):
         self.view_stack.setCurrentIndex(index)
@@ -152,19 +175,25 @@ class LeftPanel(QWidget):
     def update_path_labels(self, dir_path, models_path, dir_valid, models_valid):
         error_style = "color: #F44336; font-weight: bold;"
         if not dir_path:
-            self.llamacpp_dir_label.setText('Llama.cpp Directory: Not Set'); self.llamacpp_dir_label.setStyleSheet("")
+            self.llamacpp_dir_label.setText('Llama.cpp Directory: Not Set');
+            self.llamacpp_dir_label.setStyleSheet("")
         elif not dir_valid:
-            self.llamacpp_dir_label.setText('Llama.cpp Directory: NOT FOUND'); self.llamacpp_dir_label.setStyleSheet(
+            self.llamacpp_dir_label.setText('Llama.cpp Directory: NOT FOUND');
+            self.llamacpp_dir_label.setStyleSheet(
                 error_style)
         else:
-            self.llamacpp_dir_label.setText(f'Llama.cpp Directory: {dir_path}'); self.llamacpp_dir_label.setStyleSheet(
+            self.llamacpp_dir_label.setText(f'Llama.cpp Directory: {dir_path}');
+            self.llamacpp_dir_label.setStyleSheet(
                 "")
         if not models_path:
-            self.models_file_label.setText('Models File: Not Set'); self.models_file_label.setStyleSheet("")
+            self.models_file_label.setText('Models File: Not Set');
+            self.models_file_label.setStyleSheet("")
         elif not models_valid:
-            self.models_file_label.setText('Models File: NOT FOUND'); self.models_file_label.setStyleSheet(error_style)
+            self.models_file_label.setText('Models File: NOT FOUND');
+            self.models_file_label.setStyleSheet(error_style)
         else:
-            self.models_file_label.setText(f'Models File: {models_path}'); self.models_file_label.setStyleSheet("")
+            self.models_file_label.setText(f'Models File: {models_path}');
+            self.models_file_label.setStyleSheet("")
 
     def set_status(self, status_enum):
         self.status_label.setText(status_enum.label)
@@ -172,6 +201,10 @@ class LeftPanel(QWidget):
             f"background-color: {status_enum.color}; border-radius: 10px; min-width: 20px; min-height: 20px;")
 
     def update_button_states(self, can_load, is_running):
+        # If tuning is active, this method yields control to set_tuning_mode
+        if self._is_tuning:
+            return
+
         self.load_button.setEnabled(can_load)
         self.unload_button.setEnabled(is_running)
         self.tuning_wizard_button.setEnabled(can_load)
