@@ -135,15 +135,6 @@ class MainWindow(QWidget):
         self.output_update_timer.setInterval(100)
         self.output_update_timer.timeout.connect(self.flush_output_buffer)
 
-    def _cancel_tuning_wizard(self):
-        """Aborts the tuning process and cleans up."""
-        self.left_panel.append_output("\n[WIZARD] Tuning process cancelled by user.")
-        self.left_panel.show_output_view()
-        self.wizard_timer.stop()
-        self.wizard_generator = None
-        self.wizard_is_benchmarking = False
-        self.update_button_states()
-
     def _connect_signals(self):
         # Left Panel Signals
         self.left_panel.dir_browse_clicked.connect(self.browse_llamacpp_directory)
@@ -152,6 +143,7 @@ class MainWindow(QWidget):
         self.left_panel.load_model_clicked.connect(self.load_model)
         self.left_panel.unload_model_clicked.connect(self.unload_model)
         self.left_panel.tune_model_clicked.connect(self.start_tuning_wizard)
+        self.left_panel.tune_model_cancelled.connect(self._cancel_tuning_wizard)  # NEW connection
         self.left_panel.exit_clicked.connect(self.close)
         self.left_panel.webui_toggled.connect(self.update_auto_open_visibility)
         self.left_panel.parameter_browser.parameter_add_requested.connect(self.add_parameter_from_browser)
@@ -165,6 +157,21 @@ class MainWindow(QWidget):
         self.right_panel.duplicate_clicked.connect(self.duplicate_model)
         self.right_panel.reset_clicked.connect(self._reset_current_model)
         self.right_panel.dirty_state_changed.connect(lambda is_dirty: setattr(self, 'is_dirty', is_dirty))
+
+    def _cancel_tuning_wizard(self):
+        """Aborts the tuning process, cleans up, and restores the UI."""
+        self.left_panel.append_output("\n[WIZARD] Tuning process cancelled by user.")
+        self.wizard_timer.stop()
+        self.wizard_generator = None
+        self.wizard_is_benchmarking = False
+
+        if self.benchmark_timeout_timer and self.benchmark_timeout_timer.isActive():
+            self.benchmark_timeout_timer.stop()
+
+        self.unload_model()
+        self.left_panel.show_output_view()
+        self.left_panel.set_tuning_mode(False)
+        self.update_button_states()
 
     def handle_stdout(self):
         try:
@@ -302,7 +309,6 @@ class MainWindow(QWidget):
                 print(f"[DIAGNOSTICS] Server crashed. Sending failure result to wizard generator.")
                 self._advance_wizard(result)
 
-    # --- NEW: Centralized method to advance the wizard and handle the returned action ---
     def _advance_wizard(self, send_value=None):
         """Sends a value to the wizard generator and processes the next action it yields."""
         try:
@@ -386,7 +392,7 @@ class MainWindow(QWidget):
             self.left_panel.append_output(f"[WIZARD] Setting test timeout to {timeout / 1000:.0f} seconds.")
             self.benchmark_timeout_timer.start(timeout)
         else:
-            self.wizard_timer.start(100)  # Default to continue for unknown actions
+            self.wizard_timer.start(100)
 
     def resume_tuning_wizard(self, user_choices):
         """Receives user choices from the summary view and continues the wizard."""
@@ -708,6 +714,7 @@ class MainWindow(QWidget):
     def start_tuning_wizard(self):
         self.left_panel.show_output_view();
         self.left_panel.clear_output()
+        self.left_panel.set_tuning_mode(True)  # TRANSFORM THE BUTTON
         self.left_panel.append_output("=" * 30 + " Starting System Analysis " + "=" * 30)
         self.analysis_results = None
         current_params = {p.key: p.value for p in self.right_panel.get_parameters()}
@@ -715,6 +722,7 @@ class MainWindow(QWidget):
         if "Executable" not in current_params or not model_path:
             QMessageBox.critical(self, "Prerequisite Missing",
                                  "Tuning requires the 'Executable' and a model path ('-m') to be set in the editor.");
+            self._cancel_tuning_wizard()
             return
         if "--jinja" not in current_params:
             self.left_panel.append_output("[INFO] --jinja flag not found. It will be added for the tuning process.")
@@ -729,8 +737,10 @@ class MainWindow(QWidget):
                 QApplication.processEvents()
         except StopIteration as e:
             final_results = e.value
-        if not final_results: self.left_panel.append_output(
-            "\n[CRITICAL] System analysis failed. Cannot proceed with tuning."); return
+        if not final_results:
+            self.left_panel.append_output("\n[CRITICAL] System analysis failed. Cannot proceed with tuning.")
+            self._cancel_tuning_wizard()
+            return
         self.analysis_results = final_results
         summary = "\n" + "-" * 25 + " System & Model Summary " + "-" * 25
         summary += f"\nCPU Cores: {final_results.get('cpu_physical_cores', 'N/A')}"
@@ -747,8 +757,7 @@ class MainWindow(QWidget):
         summary += "\n" + "-" * 72
         self.left_panel.append_output(summary)
         QApplication.processEvents()
-        self.left_panel.tuning_wizard_button.setEnabled(False)
-        self.left_panel.load_button.setEnabled(False)
+
         if self.analysis_results.get('model_architecture') == 'Dense':
             current_params_dict = {p.key: p.value for p in self.right_panel.get_parameters()}
             if '-md' not in current_params_dict and '--model-draft' not in current_params_dict:
@@ -762,7 +771,7 @@ class MainWindow(QWidget):
         final_params_dict = {p.key: p.value for p in final_params_list}
         self.wizard = TuningWizard(self.analysis_results, final_params_dict)
         self.wizard_generator = self.wizard.run_tuning_wizard()
-        self._advance_wizard()  # Start the wizard
+        self._advance_wizard()
 
     def _setup_benchmark_timer(self):
         if self.benchmark_timeout_timer is None:
@@ -822,6 +831,7 @@ class MainWindow(QWidget):
         self.wizard_timer.stop()
         self.wizard_generator = None
         self.wizard_is_benchmarking = False
+        self.left_panel.set_tuning_mode(False)
         self.update_button_states()
         if self.best_params_snapshot:
             if QMessageBox.question(self, "Tuning Complete", "Keep the optimal parameters found by the wizard?",
