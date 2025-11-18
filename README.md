@@ -68,6 +68,27 @@ Features
 
 </details>
 
+<details>
+<summary><strong>🖥️ Automated Performance Tuning Wizard - WIP</strong></summary>
+
+
+*   Intelligent System Analysis: Automatically scans your unique hardware configuration (NVIDIA GPUs, CPU, System RAM) to understand its capabilities.
+
+*   Deep Model Inspection: Performs a quick, minimal load to extract critical metadata directly from your GGUF model, like total layer count, max context, and correct GPU device order.
+
+*   Optimal Offload Strategy: Determines the best way to distribute the model's layers across your GPU(s) and CPU.
+    *   Features tailored strategies for Single-GPU, Multi-GPU (VRAM Only), and Multi-GPU with CPU Offload.
+    *   Includes specialized logic to handle the unique requirements of both Dense and Mixture of Experts (MoE) architectures.
+
+*   Context Size Maximization: After finding the best offload configuration, it runs an adaptive search to discover the largest possible context size (-c) your system can handle without running out of memory.
+
+*   Final Benchmark & Results: Once all parameters are optimized, it runs a final performance test to measure the average tokens per second, giving you a concrete measure of the final performance.
+
+*   Ready-to-Use Output: The result is a single, optimized command line, benchmarked and ready to be saved for immediate use.
+
+*   All files are under Experimental folder.
+
+</details>
 
 
 ## Running the Application
@@ -117,35 +138,49 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 *   Very Early Version of Model parameter autotuning for Window and CUDA(I only have nvidia gpus and using window atm)
 
 ##   Change Log
-*   11/17/2025 - New ui for Tuning Model, display system and model info alongside of Tuning Configuration and recommended parameters
-*   Tuning process now auto adjust context value alongside with tensor split and layer offload.
-*   User has a choice to offload stragety(Single gpu only, multi gpu(vram only), or multi-gpu + cpu offload)
-*   User also has option to maximize context size after offload. Which if you have left over vram, it will fill them with context up to max context. This option will work with single and multi gpu. currently testing multi-gpu+cpu offload but there some issues..
 
-## 🚀 The Tuning Wizard is Here!
+*   11/17/2025 - 
+    *   New ui for Tuning Model, display system and model info alongside of Tuning Configuration and recommended parameters
+    *   Tuning process now auto adjust context value alongside with tensor split and layer offload.
+    *   User has a choice to offload stragety(Single gpu only, multi gpu(vram only), or multi-gpu + cpu offload)
+    *   User also has option to maximize context size after offload. Which if you have left over vram, it will fill them with context up to max context. This option will work with single and multi gpu.   *      I'm currently testing multi-gpu+cpu offload but there some issues..
 
-This is a major feature release that introduces the **Tuning Wizard**, a powerful tool designed to take the guesswork out of configuring your models. It automatically analyzes your system and the selected model to find the optimal performance settings for *your specific setup*.
+*   11/18/2025 - 
+    *   Add recommendation for tuning strategy
+    *   A way to cancel the tuning process
+      
 
-No more manually tweaking `context`, `ngl`, `tensor-split`, or `ncmoe` values! The wizard finds the configuration that gives you the highest tokens per second (t/s) without running out of memory.
+##   Limitations and Scope
+<details>
+<summary><strong>🖥️ Known Limitations and Scope</strong></summary>
 
-### ✨ Key Features of the Tuning Wizard
+The Llama.cpp Model Launcher is a powerful tool designed to automate and simplify the process of finding optimal settings for your models. However, like any software, it has boundaries and design considerations. Please review these known limitations to understand the wizard's current behavior and whether it's the right fit for your specific hardware and goals.
 
-*   **System Analysis:** Scans your CPU, system RAM, and the available VRAM on all detected NVIDIA GPUs.
-*   **Model Inspection:** Determines the model's file size and architecture (Dense vs. Mixture of Experts) to choose the right strategy.
-*   **Automated Benchmarking:** Intelligently tests different offloading configurations by loading the model, sending real inference requests, and measuring the performance.
-*   **Smart Strategy Selection:** Automatically uses different tuning algorithms for single-GPU, multi-GPU, and Mixture of Experts (MoE) models to handle their unique requirements.
-*   **Optimal Configuration:** Identifies the settings that provide the best performance and presents them to you at the end of the process.
+1. Understanding the "CPU Offload" Strategies
+This is the most important nuance in the wizard's current logic. You might select a "with CPU Offload" strategy with the goal of maximizing your context window by using system RAM, even at the cost of speed.
+However, the wizard's primary goal is always to maximize performance (tokens/second) first.
+Here’s how it works:
+The wizard first finds the absolute maximum number of model layers (-ngl) that can fit into your GPU VRAM while remaining stable.
+It then takes that configuration and finds the largest context size (-c) that can fit within that VRAM-only limit.
+What this means for you: If your model and a basic context window can fit entirely into your GPU's VRAM, the wizard will not intentionally offload layers to the CPU to enable an even larger context size. It prioritizes the speed gain from keeping everything in VRAM.
+Example: You have a 30B model and a GPU with enough VRAM to hold all of its layers. You select the "Multi-GPU with CPU Offload" strategy, hoping to get a 128k context. The wizard will instead determine that a full GPU offload is possible and will find the maximum context that fits in VRAM (e.g., 32k), ignoring the CPU offload part of your request because it wasn't needed for the initial load.
+This is a deliberate design choice to favor speed, but we recognize that some users prioritize context length above all else. Future versions may include a dedicated "Context First" tuning mode.
 
-### 💡 How to Use the Tuning Wizard
+2. Windows-Only Support
+The application was developed and tested exclusively on the Windows operating system. It relies on Windows-specific APIs and command-line behavior (like .bat files for execution and taskkill for process management). It is not expected to work on macOS or Linux without significant modifications.
 
-1.  **Select Your Model:** Choose the model you want to tune from the main dropdown menu.
-2.  **Verify Model Path:** Make sure the `-m` (or `--model`) parameter on the right-hand editor points to the correct `.gguf` file. The wizard needs this to analyze the model.
-3.  **Click "Tune Model":** Press the bold **Tune Model** button on the main control bar.
-4.  **Watch the Process:** The wizard will begin its analysis and benchmarking. All steps, tests, and results are printed in real-time to the output window.
-    *   *Note: This process can take several minutes as it involves loading and unloading your model multiple times to find the best settings.*
-5.  **Apply & Save:** When the wizard is finished, it will ask if you want to apply the optimal parameters it found. If you accept, the editor will be updated. **Don't forget to click "Save to File"** to make the changes permanent
+3. NVIDIA GPU Required
+All hardware analysis, VRAM measurement, and offloading logic are built around NVIDIA's CUDA platform and its associated libraries (pynvml). The application has no code for detecting or utilizing AMD or Intel GPUs, and they are not supported.
 
-### All files are under Experimental folder.
+4. Hardware Testing Scope
+Primary Testbed: The majority of testing was performed on a system with a dual NVIDIA GPU setup.
+Single GPU: The "Single GPU" strategies are considered stable and are expected to work reliably.
+3+ GPUs: Configurations with three or more GPUs have not been tested and may produce unexpected results with the tensor split (-ts) logic.
+
+5. Limited Testing on Very Large Models (>70B)
+The development and testing system is equipped with 32 GB of DDR4 RAM. This is sufficient for tuning models up to the 70B class, which often require partial CPU offloading. However, extremely large models (>100B) that would be almost entirely reliant on system RAM have not been thoroughly validated. The wizard's dynamic timeouts and memory calculations may not be perfectly calibrated for the performance characteristics of these huge models.
+
+</details>
 
   
 
