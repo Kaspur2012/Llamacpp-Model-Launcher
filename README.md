@@ -133,21 +133,19 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 ##   Change Log
 
-*   11/17/2025 - 
-    *   New ui for Tuning Model, display system and model info alongside of Tuning Configuration and recommended parameters
-    *   Tuning process now auto adjust context value alongside with tensor split and layer offload.
-    *   User has a choice to offload stragety(Single gpu only, multi gpu(vram only), or multi-gpu + cpu offload)
-    *   User also has option to maximize context size after offload. Which if you have left over vram, it will fill them with context up to max context. This option will work with single and multi gpu.   *      I'm currently testing multi-gpu+cpu offload but there some issues..
-
-*   11/18/2025 - 
-    *   Add recommendation for tuning strategy
-    *   A way to cancel the tuning process
-
 *   11/20/2025 - 
     *   added --mmproj parameter popup for qwen3 VL model during the initial starting of tuning
     *   minor refactoring, trying to make main_window.py smaller
     *   minor bug fix to command window not trigger dirty flag
-      
+*   11/18/2025 - 
+    *   Add recommendation for tuning strategy
+    *   A way to cancel the tuning process
+*   11/17/2025 - 
+    *   New ui for Tuning Model, display system and model info alongside of Tuning Configuration and recommended parameters
+    *   Tuning process now auto adjust context value alongside with tensor split and layer offload.
+    *   User has a choice to offload stragety(Single gpu only, multi gpu(vram only), or multi-gpu + cpu offload)
+    *   User also has option to maximize context size after offload. Which if you have left over vram, it will fill them with context up to max context. This option will work with single and multi gpu.   	*      I'm currently testing multi-gpu+cpu offload but there some issues..
+
 
 ##   Limitations and Scope
 <details>
@@ -188,6 +186,10 @@ All hardware analysis, VRAM measurement, and offloading logic are built around *
 #### **5. Limited Testing on Very Large Models (>70B)**
 
 The development and testing system is equipped with **32 GB of DDR4 RAM**. This is sufficient for tuning models up to the 70B class, which often require partial CPU offloading. However, extremely large models (>100B) that would be almost entirely reliant on system RAM have not been thoroughly validated. The wizard's dynamic timeouts and memory calculations may not be perfectly calibrated for the performance characteristics of these huge models.
+
+#### **6. Agressive context tuning **
+
+Currently the context tuning is super agrssive, it will squeeze all your vram for the most context. The app is sending a ~2k token for stability test so if you and sending very large context to the llm, you WILL see it running out of memory. In this case you need to either manually lower the context to compensate for this or use your own stability long prompt(located in the parameters_db.py -> BENCHMARK_PROMPT, just use your super lomg prompt here so the model can adjust to your long prompt).
 
 </details>
 
