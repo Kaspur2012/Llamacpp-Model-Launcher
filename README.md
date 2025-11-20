@@ -91,7 +91,7 @@ Features
 </details>
 
 <details>
-<summary><strong>Tuning process - WIP</strong></summary>
+<summary><strong>Tuning Overall Process - WIP</strong></summary>
 
 ```mermaid
 graph TD
@@ -172,7 +172,120 @@ graph TD
 ```
 </details>
 
+<details>
+<summary><strong>The Offload Logic - WIP</strong></summary>
 
+```mermaid
+graph TD
+    %% Styles
+    classDef dense fill:#e1f5fe,stroke:#0277bd,stroke-width:2px;
+    classDef moe fill:#e0f2f1,stroke:#00695c,stroke-width:2px;
+    classDef fail fill:#ffcdd2,stroke:#c62828,stroke-width:2px;
+
+    Input(Input: Selected Strategy) --> StrategyCheck{Strategy Type}
+
+    %% --- SINGLE GPU LOGIC ---
+    StrategyCheck -- Single GPU --> S_TryFull[Try: -ngl 99<br>-sm none]
+    S_TryFull --> S_Success{Success?}
+    S_Success -- Yes --> ReturnParams
+    S_Success -- No --> S_Prompt[Prompt User:<br>Try Multi-GPU?]
+    S_Prompt -- Yes --> M_CPU_Entry
+    S_Prompt -- No --> Abort(Abort)
+
+    %% --- MULTI VRAM LOGIC ---
+    StrategyCheck -- Multi-GPU<br>VRAM Only --> V_Calc[Calc 'Primary-First'<br>Tensor Split]
+    V_Calc --> V_TryFull[Try: -ngl 99<br>-ts calculated]
+    V_TryFull --> V_Success{Success?}
+    V_Success -- Yes --> ReturnParams
+    V_Success -- No --> M_CPU_Entry(Fallback to<br>Multi-CPU)
+
+    %% --- MULTI CPU LOGIC ---
+    StrategyCheck -- Multi-GPU<br>CPU Offload --> M_CPU_Entry
+    
+    M_CPU_Entry --> ArchCheck{Model Arch?}
+    
+    %% Dense Sub-logic
+    ArchCheck -- Dense --> D_Binary[<b>Binary Search</b><br>Range: 0 to Total Layers]
+    subgraph DenseLogic [Dense Tuning]
+        D_Test[Test -ngl MID]
+        D_Test --> D_Res{Stable?}
+        D_Res -- Yes --> D_Save[Save Best -ngl<br>Try Higher]
+        D_Res -- No --> D_Lower[Try Lower]
+    end
+    D_Binary --> DenseLogic
+    DenseLogic --> ReturnParams
+
+    %% MoE Sub-logic
+    ArchCheck -- MoE --> M_Coarse[<b>Stage 1: Coarse Search</b><br>Find -ncmoe crossover]
+    subgraph MoELogic [MoE Tuning]
+        M_Step1[Test -ncmoe 0, 5, 10...]
+        M_Step1 --> M_Bottleneck{Bottleneck<br>Moved?}
+        M_Bottleneck -- Yes --> M_Fine[<b>Stage 2: Fine Tune</b><br>Adjust -ts & -ncmoe]
+        M_Fine --> M_Loop[Loop: OOM on Primary?<br>Inc -ncmoe<br>OOM on Secondary?<br>Adjust -ts]
+    end
+    M_Coarse --> MoELogic
+    MoELogic --> ReturnParams
+
+    class DenseLogic dense;
+    class MoELogic moe;
+    class Abort fail;
+```
+</details>
+<details>
+<summary><strong>Adaptive Context Search - WIP</strong></summary>
+
+```mermaid
+graph TD
+    %% Styles
+    classDef action fill:#fff9c4,stroke:#fbc02d,stroke-width:2px;
+    classDef check fill:#e1f5fe,stroke:#0277bd,stroke-width:2px;
+    classDef fail fill:#ffcdd2,stroke:#c62828,stroke-width:2px;
+
+    Start(Start Context Tuning) --> Range[Set Range:<br>Low=4096, High=MaxModel]
+    
+    Range --> LoopCheck{Low <= High?}
+    LoopCheck -- No --> Finish(Return Best Params)
+    
+    LoopCheck -- Yes --> CalcMid[Calculate MID Context]
+    CalcMid --> TestLoad[Test Load with<br>-c MID]
+    
+    TestLoad --> Result{Result?}
+    
+    %% Success Path
+    Result -- Success --> SuccessAct[Store Config as Best<br>Low = Mid + 512]
+    SuccessAct --> LoopCheck
+    
+    %% Failure Path
+    Result -- OOM Error --> AnalyzeOOM[Analyze OOM Details]
+    
+    AnalyzeOOM --> StratCheck{Is Multi-GPU?}
+    
+    %% Single GPU OOM
+    StratCheck -- No --> Reduce[High = Mid - 512]
+    
+    %% Multi GPU OOM (The Smart Logic)
+    StratCheck -- Yes --> VictimCheck{Failing<br>Device?}
+    
+    VictimCheck -- Primary --> Rebal1[Action: Shift load to<br>Secondary GPU]
+    VictimCheck -- Secondary --> Rebal2[Action: Shift load to<br>Primary GPU]
+    
+    Rebal1 --> RetryLoad[Retry Load<br>Same Context]
+    Rebal2 --> RetryLoad
+    
+    RetryLoad --> RetryRes{Success?}
+    RetryRes -- Yes --> SuccessAct
+    RetryRes -- No --> LimitCheck{Max Retries<br>Reached?}
+    
+    LimitCheck -- No --> AnalyzeOOM
+    LimitCheck -- Yes --> Reduce
+
+    Reduce --> LoopCheck
+
+    class AnalyzeOOM,CalcMid,Rebal1,Rebal2 action;
+    class TestLoad,RetryLoad check;
+    class Reduce fail;
+```
+</details>
 
 ## Running the Application
 
