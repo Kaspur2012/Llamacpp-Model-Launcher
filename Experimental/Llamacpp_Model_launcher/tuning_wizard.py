@@ -75,6 +75,21 @@ class TuningWizard:
              'params': {'--no-warmup': None}},
         ]
 
+        # --- NEW LOGIC: Uncheck q8 KV cache for gpt-oss if it fits in VRAM ---
+        model_path = self.initial_params.get('-m', self.initial_params.get('--model', '')).lower()
+        if 'gpt-oss' in model_path:
+            gpus = self.analysis.get('gpus', [])
+            total_free_vram = sum(gpu.get('vram', {}).get('free_gb', 0) for gpu in gpus)
+            model_size = self.analysis.get('model_size_gb', 0)
+            # Check if free VRAM > model size + 1.5GB buffer
+            if total_free_vram > (model_size + 1.5):
+                for opt in proposed_optimizations:
+                    if opt['id'] == 'kv_cache_q8':
+                        opt['checked'] = False
+                        yield {'action': 'log', 'message': "> GPT-OSS fits in VRAM: Unchecking 8-bit KV cache to maximize quality."}
+                        break
+        # ---------------------------------------------------------------------
+
         has_draft_model = '-md' in self.initial_params or '--model-draft' in self.initial_params
         if has_draft_model:
             yield {'action': 'log', 'message': "> Draft model detected. Proposing speculative decoding optimizations."}
@@ -119,7 +134,6 @@ class TuningWizard:
             yield {'action': 'log',
                    'message': f"> Pinning draft model to primary GPU with --device-draft {self.base_params['-devd']}."}
 
-        model_path = self.initial_params.get('-m', self.initial_params.get('--model', ''))
         if 'gpt-oss' in model_path.lower():
             yield {'action': 'log', 'message': "> Applying gpt-oss specific reasoning parameter."}
             self.base_params['--chat-template-kwargs'] = '{"reasoning_effort": "medium"}'
