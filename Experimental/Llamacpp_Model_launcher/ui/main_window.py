@@ -16,38 +16,13 @@ from Llamacpp_Model_launcher.core import (
     CommandBuilder,
     Parameter
 )
+from Llamacpp_Model_launcher.core.workers import ApiRequestWorker, StabilityRequestWorker
 
 from Llamacpp_Model_launcher.system_analyzer import SystemAnalyzer
 from Llamacpp_Model_launcher.tuning_wizard import TuningWizard
 
-# Child UI components are now imported
 from .left_panel import LeftPanel
 from .right_panel import RightPanel
-
-
-# Worker classes remain for now
-class ApiRequestWorker(QObject):
-    finished = pyqtSignal()
-
-    def __init__(self, wizard_instance):
-        super().__init__()
-        self.wizard = wizard_instance
-
-    def run(self):
-        self.wizard.run_api_benchmark_requests()
-        self.finished.emit()
-
-
-class StabilityRequestWorker(QObject):
-    finished = pyqtSignal()
-
-    def __init__(self, wizard_instance):
-        super().__init__()
-        self.wizard = wizard_instance
-
-    def run(self):
-        self.wizard.run_stability_api_request()
-        self.finished.emit()
 
 
 class MainWindow(QWidget):
@@ -75,6 +50,7 @@ class MainWindow(QWidget):
         self.output_update_timer = QTimer(self)
         self.wizard_current_timeout = 300000
 
+        # REGEX DEFINITIONS
         self.tps_regex = re.compile(
             r"^\s*eval time\s*=\s*[\d.]+\s*ms\s*/\s*\d+\s*tokens\s*\([\s\d.]+\s*ms per token,\s*([\d.]+)\s*tokens per second\)",
             re.MULTILINE
@@ -143,7 +119,7 @@ class MainWindow(QWidget):
         self.left_panel.load_model_clicked.connect(self.load_model)
         self.left_panel.unload_model_clicked.connect(self.unload_model)
         self.left_panel.tune_model_clicked.connect(self.start_tuning_wizard)
-        self.left_panel.tune_model_cancelled.connect(self._cancel_tuning_wizard)  # NEW connection
+        self.left_panel.tune_model_cancelled.connect(self._cancel_tuning_wizard)
         self.left_panel.exit_clicked.connect(self.close)
         self.left_panel.webui_toggled.connect(self.update_auto_open_visibility)
         self.left_panel.parameter_browser.parameter_add_requested.connect(self.add_parameter_from_browser)
@@ -159,7 +135,6 @@ class MainWindow(QWidget):
         self.right_panel.dirty_state_changed.connect(lambda is_dirty: setattr(self, 'is_dirty', is_dirty))
 
     def _cancel_tuning_wizard(self):
-        """Aborts the tuning process, cleans up, and restores the UI."""
         self.left_panel.append_output("\n[WIZARD] Tuning process cancelled by user.")
         self.wizard_timer.stop()
         self.wizard_generator = None
@@ -269,7 +244,7 @@ class MainWindow(QWidget):
                             'gpus': self.wizard_found_gpus,
                             'max_context': self.wizard_found_context,
                             'error': '' if (
-                                        self.wizard_found_layers and self.wizard_found_context) else 'Could not find all required metadata'
+                                    self.wizard_found_layers and self.wizard_found_context) else 'Could not find all required metadata'
                         }
                         print(f"[DIAGNOSTICS] Layer extraction finished. Result: {result}")
                         self._advance_wizard(result)
@@ -277,7 +252,7 @@ class MainWindow(QWidget):
                     elif self.wizard_current_is_viability_check == "ngl_testing":
                         was_successful = (not is_error) and self.wizard_idle_signal_received and \
                                          (not self.wizard_saw_soft_failure_artifact) and (
-                                                     self.wizard_error_details is None)
+                                                 self.wizard_error_details is None)
 
                         if was_successful:
                             print(
@@ -310,7 +285,6 @@ class MainWindow(QWidget):
                 self._advance_wizard(result)
 
     def _advance_wizard(self, send_value=None):
-        """Sends a value to the wizard generator and processes the next action it yields."""
         try:
             if not self.wizard_generator:
                 self.wizard_timer.stop()
@@ -323,11 +297,9 @@ class MainWindow(QWidget):
             self._finish_tuning_wizard()
 
     def _process_next_wizard_step(self):
-        """Wrapper to call _advance_wizard without sending a value."""
         self._advance_wizard()
 
     def _process_wizard_action(self, action):
-        """Processes a single action dictionary from the wizard."""
         print(f"[DIAGNOSTICS] Wizard action received: {action}")
 
         action_type = action.get('action')
@@ -395,7 +367,6 @@ class MainWindow(QWidget):
             self.wizard_timer.start(100)
 
     def resume_tuning_wizard(self, user_choices):
-        """Receives user choices from the summary view and continues the wizard."""
         self.left_panel.show_output_view()
         self.left_panel.append_output(f"\n[WIZARD] User has confirmed settings. Resuming tuning process...")
         self._advance_wizard(user_choices)
@@ -438,6 +409,7 @@ class MainWindow(QWidget):
         elif isinstance(input_widget, QLineEdit):
             value = input_widget.text().strip()
         self.right_panel.add_parameter_row(param_data['prefix'], value)
+        self.right_panel._mark_as_dirty()
 
     def add_new_model(self):
         if self.is_dirty and QMessageBox.question(self, 'Unsaved Changes', "Save unsaved changes first?",
@@ -767,6 +739,34 @@ class MainWindow(QWidget):
                     draft_file, _ = QFileDialog.getOpenFileName(self, "Select Draft Model File", "",
                                                                 "GGUF Files (*.gguf)")
                     if draft_file: self._update_editor_params({'-md': draft_file})
+
+        # Check for Vision/MMProj
+        model_path_lower = model_path.lower()
+        # Check for 'vl' or 'vision' in the filename specifically to avoid path false positives
+        filename_lower = os.path.basename(model_path_lower)
+
+        # Refresh params in case draft model added something (though unlikely to overlap)
+        current_params_dict = {p.key: p.value for p in self.right_panel.get_parameters()}
+
+        if ('vl' in filename_lower or 'vision' in filename_lower) and \
+                '--mmproj' not in current_params_dict and \
+                '--mmproj-url' not in current_params_dict:
+
+            reply = QMessageBox.question(
+                self,
+                "Vision Model Detected",
+                "This appears to be a Vision Language Model. To use image inputs, a Multimodal Projector (--mmproj) is usually required.\n\nDo you want to select one now?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+
+            if reply == QMessageBox.StandardButton.Yes:
+                mmproj_file, _ = QFileDialog.getOpenFileName(
+                    self, "Select Multimodal Projector File", "", "GGUF Files (*.gguf);;All Files (*.*)"
+                )
+                if mmproj_file:
+                    self._update_editor_params({'--mmproj': mmproj_file})
+
         final_params_list = self.right_panel.get_parameters()
         final_params_dict = {p.key: p.value for p in final_params_list}
         self.wizard = TuningWizard(self.analysis_results, final_params_dict)
