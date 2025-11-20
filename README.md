@@ -142,6 +142,11 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 *   11/18/2025 - 
     *   Add recommendation for tuning strategy
     *   A way to cancel the tuning process
+
+*   11/20/2025 - 
+    *   added --mmproj parameter popup for qwen3 VL model during the initial starting of tuning
+    *   minor refactoring, trying to make main_window.py smaller
+    *   minor bug fix to command window not trigger dirty flag
       
 
 ##   Limitations and Scope
