@@ -69,7 +69,7 @@ Features
 </details>
 
 <details>
-<summary><strong>🖥️ Automated Performance Tuning Wizard - WIP</strong></summary>
+<summary><strong>⚙️ Automated Performance Tuning Wizard - WIP</strong></summary>
 
 
 *   Intelligent System Analysis: Automatically scans your unique hardware configuration (NVIDIA GPUs, CPU, System RAM) to understand its capabilities.
@@ -91,7 +91,7 @@ Features
 </details>
 
 <details>
-<summary><strong>Tuning Overall Process - WIP</strong></summary>
+<summary><strong>⚙️ Tuning Overall Process - WIP</strong></summary>
 
 ```mermaid
 graph TD
@@ -173,7 +173,7 @@ graph TD
 </details>
 
 <details>
-<summary><strong>The Offload Logic - WIP</strong></summary>
+<summary><strong>⚙️ The Offload Logic - WIP</strong></summary>
 
 ```mermaid
 graph TD
@@ -232,7 +232,7 @@ graph TD
 ```
 </details>
 <details>
-<summary><strong>Adaptive Context Search - WIP</strong></summary>
+<summary><strong>⚙️ Adaptive Context Search - WIP</strong></summary>
 
 ```mermaid
 graph TD
