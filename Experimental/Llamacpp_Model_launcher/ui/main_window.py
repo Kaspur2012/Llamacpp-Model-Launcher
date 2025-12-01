@@ -50,6 +50,13 @@ class MainWindow(QWidget):
         self.output_update_timer = QTimer(self)
         self.wizard_current_timeout = 300000
 
+        # Track KV cache entries for the current run
+        self.captured_kv_entries = []
+
+        # Track Resource Usage for Resource Guard
+        self.detected_cpu_usage_mib = 0.0
+        self.detected_gpu_usage_mib = {}
+
         # REGEX DEFINITIONS
         self.tps_regex = re.compile(
             r"^\s*eval time\s*=\s*[\d.]+\s*ms\s*/\s*\d+\s*tokens\s*\([\s\d.]+\s*ms per token,\s*([\d.]+)\s*tokens per second\)",
@@ -58,6 +65,15 @@ class MainWindow(QWidget):
         self.idle_regex = re.compile(r"all slots are idle", re.IGNORECASE)
         self.layer_count_regex = re.compile(r"n_layer\s*=\s*(\d+)", re.IGNORECASE)
         self.context_length_regex = re.compile(r"[a-zA-Z0-9_.-]+\.context_length\s+u32\s+=\s+(\d+)", re.IGNORECASE)
+
+        # Capture KV Cache stats
+        self.kv_cache_regex = re.compile(r"llama_kv_cache:\s+size\s+=\s+([\d.]+)\s+MiB\s+\(\s*(\d+)\s+cells")
+
+        # Capture Model Load Buffers (Resource Guard)
+        self.buffer_cpu_regex = re.compile(r"load_tensors:\s+CPU model buffer size\s+=\s+([\d.]+)\s+MiB", re.IGNORECASE)
+        self.buffer_cuda_regex = re.compile(r"load_tensors:\s+CUDA(\d+) model buffer size\s+=\s+([\d.]+)\s+MiB",
+                                            re.IGNORECASE)
+
         self.cuda_oom_regex_alloc = re.compile(
             r"allocating\s+([\d.]+)\s+MiB\s+on\s+device\s+(\d+):\s+cudaMalloc\s+failed:\s+out\s+of\s+memory",
             re.IGNORECASE
@@ -153,6 +169,69 @@ class MainWindow(QWidget):
             data = self.process.readAllStandardOutput().data().decode('utf-8', errors='ignore');
             self.output_buffer += data
             if not self.output_update_timer.isActive(): self.output_update_timer.start()
+
+            if self.analysis_results is not None:
+                # 1. Capture KV Stats
+                kv_matches = self.kv_cache_regex.finditer(self.output_buffer)
+                found_new_kv = False
+                for match in kv_matches:
+                    try:
+                        size_mib = float(match.group(1))
+                        cells = int(match.group(2))
+                        entry = (size_mib, cells)
+                        if entry not in self.captured_kv_entries:
+                            self.captured_kv_entries.append(entry)
+                            found_new_kv = True
+                            if cells > 0:
+                                total_mib = sum(e[0] for e in self.captured_kv_entries)
+                                mb_per_token = total_mib / cells
+                                self.analysis_results['kv_mb_per_token'] = mb_per_token
+                                print(
+                                    f"[DIAGNOSTICS] KV Cache Detected: {size_mib} MiB. Total Unique: {total_mib} MiB. Cost: {mb_per_token:.4f} MB/token")
+                    except (ValueError, IndexError):
+                        pass
+
+                # Early Probe Exit
+                if found_new_kv and self.wizard_is_benchmarking and self.wizard_current_is_viability_check == "kv_probe":
+                    self.left_panel.append_output("[WIZARD] KV Cache stats captured. Stopping probe early.")
+                    self.unload_model()
+
+                # 2. Resource Guard: Capture Model Buffers
+                # CPU
+                cpu_matches = self.buffer_cpu_regex.finditer(self.output_buffer)
+                for match in cpu_matches:
+                    try:
+                        self.detected_cpu_usage_mib += float(match.group(1))
+                    except ValueError:
+                        pass
+
+                # CUDA
+                cuda_matches = self.buffer_cuda_regex.finditer(self.output_buffer)
+                for match in cuda_matches:
+                    try:
+                        dev_id = int(match.group(1))
+                        size = float(match.group(2))
+                        self.detected_gpu_usage_mib[dev_id] = self.detected_gpu_usage_mib.get(dev_id, 0.0) + size
+                    except ValueError:
+                        pass
+
+                # 3. Resource Guard: Active Protection
+                # If CPU usage is dangerously close to Free RAM, abort to prevent freezing
+                if self.detected_cpu_usage_mib > 0:
+                    free_ram_mib = self.analysis_results.get('ram', {}).get('free_gb', 0) * 1024
+                    # 128 MB Safety Buffer for OS response
+                    if self.detected_cpu_usage_mib > (free_ram_mib - 16):
+                        print(
+                            f"[RESOURCE GUARD] RAM Critical: Used {self.detected_cpu_usage_mib:.1f} MiB > Available {free_ram_mib:.1f} MiB")
+                        self.left_panel.append_output(
+                            f"\n[RESOURCE GUARD] Critical RAM usage detected ({self.detected_cpu_usage_mib / 1024:.1f} GB). Killing process to prevent system freeze.")
+                        self.wizard_error_details = {
+                            'type': 'resource_guard',
+                            'resource': 'ram',
+                            'detected_mib': self.detected_cpu_usage_mib,
+                            'limit_mib': free_ram_mib
+                        }
+                        self.unload_model()
 
             if self.wizard_is_benchmarking and self.wizard_current_is_viability_check == "layer_extraction":
                 layer_match = self.layer_count_regex.search(self.output_buffer)
@@ -269,8 +348,23 @@ class MainWindow(QWidget):
                         self.wizard_idle_signal_received = False
                         self.wizard_saw_soft_failure_artifact = False
 
-                        result = {'success': was_successful, 'error_details': self.wizard_error_details}
+                        # Pass back tracked usage data
+                        result = {
+                            'success': was_successful,
+                            'error_details': self.wizard_error_details,
+                            'resource_usage': {
+                                'cpu_mib': self.detected_cpu_usage_mib,
+                                'gpu_mib': self.detected_gpu_usage_mib
+                            }
+                        }
                         self._advance_wizard(result)
+
+                    elif self.wizard_current_is_viability_check == "kv_probe":
+                        # Probe is considered successful if we captured any KV data, regardless of clean exit
+                        captured_data = self.analysis_results.get('kv_mb_per_token', 0.0) > 0
+                        print(f"[DIAGNOSTICS] KV Probe finished. Captured data: {captured_data}")
+                        self._advance_wizard()  # Just advance, the wizard checks the shared analysis dict
+
                 except StopIteration:
                     self._finish_tuning_wizard()
 
@@ -285,6 +379,7 @@ class MainWindow(QWidget):
                 self._advance_wizard(result)
 
     def _advance_wizard(self, send_value=None):
+        """Sends a value to the wizard generator and processes the next action it yields."""
         try:
             if not self.wizard_generator:
                 self.wizard_timer.stop()
@@ -297,9 +392,11 @@ class MainWindow(QWidget):
             self._finish_tuning_wizard()
 
     def _process_next_wizard_step(self):
+        """Wrapper to call _advance_wizard without sending a value."""
         self._advance_wizard()
 
     def _process_wizard_action(self, action):
+        """Processes a single action dictionary from the wizard."""
         print(f"[DIAGNOSTICS] Wizard action received: {action}")
 
         action_type = action.get('action')
@@ -339,7 +436,9 @@ class MainWindow(QWidget):
             if msg_box.clickedButton() == multi_gpu_button:
                 user_choice = 'try_multi'
             self._advance_wizard(user_choice)
-        elif action_type == 'extract_layer_count' or action_type == 'test_ngl_value' or action_type == 'load_and_benchmark':
+
+        # --- MODIFIED: Added probe_kv_stats to list of launch actions ---
+        elif action_type == 'extract_layer_count' or action_type == 'test_ngl_value' or action_type == 'load_and_benchmark' or action_type == 'probe_kv_stats':
             self.wizard_timer.stop()
             self.wizard_is_benchmarking = True
 
@@ -354,6 +453,9 @@ class MainWindow(QWidget):
                 self.wizard_awaiting_idle_signal = False
                 self.wizard_idle_signal_received = False
                 self.wizard_saw_soft_failure_artifact = False
+            elif action_type == 'probe_kv_stats':
+                self.wizard_current_is_viability_check = "kv_probe"
+                self.wizard_error_details = None
             else:  # load_and_benchmark
                 self.wizard_current_is_viability_check = False
                 self.wizard_current_timeout = action.get('timeout_ms', 300000)
@@ -367,6 +469,7 @@ class MainWindow(QWidget):
             self.wizard_timer.start(100)
 
     def resume_tuning_wizard(self, user_choices):
+        """Receives user choices from the summary view and continues the wizard."""
         self.left_panel.show_output_view()
         self.left_panel.append_output(f"\n[WIZARD] User has confirmed settings. Resuming tuning process...")
         self._advance_wizard(user_choices)
@@ -409,6 +512,7 @@ class MainWindow(QWidget):
         elif isinstance(input_widget, QLineEdit):
             value = input_widget.text().strip()
         self.right_panel.add_parameter_row(param_data['prefix'], value)
+        # --- FIX: Trigger dirty state so the asterisk appears ---
         self.right_panel._mark_as_dirty()
 
     def add_new_model(self):
@@ -554,10 +658,18 @@ class MainWindow(QWidget):
 
     def load_model(self):
         self.left_panel.show_output_view()
+        # Reset counters for resource guard
+        self.detected_cpu_usage_mib = 0.0
+        self.detected_gpu_usage_mib = {}
+
         if not self.llamacpp_dir: QMessageBox.warning(self, "Warning", "Set the Llama.cpp directory first."); return
         params_from_editor = self.right_panel.get_parameters()
         command_str = self.command_builder.build(params_from_editor)
         if not command_str: QMessageBox.warning(self, "Warning", "Command is empty."); return
+
+        # --- FIX: Reset KV capture list for new run ---
+        self.captured_kv_entries = []
+
         log_msg = f"Working Dir: {self.llamacpp_dir}\nExecuting Command: {command_str}\n\n" + "=" * 80 + "\n"
         self.left_panel.clear_output();
         self.left_panel.append_output(log_msg)
