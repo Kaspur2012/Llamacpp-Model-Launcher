@@ -1,7 +1,7 @@
 # Llamacpp_Model_launcher/ui/summary_panel.py
 
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame,
-                             QFormLayout, QRadioButton, QCheckBox, QButtonGroup)
+                             QFormLayout, QRadioButton, QCheckBox, QButtonGroup, QSpinBox)
 from PyQt6.QtCore import pyqtSignal, Qt
 from .styles import PARAMETER_BROWSER_STYLES
 
@@ -182,7 +182,51 @@ class SummaryPanel(QWidget):
         self.maximize_context_checkbox = QCheckBox("Maximize Context Size After Offload")
         self.maximize_context_checkbox.setToolTip(
             "Finds the largest possible context size (`-c`) that fits in your available memory for the chosen offload strategy.")
+        self.maximize_context_checkbox.stateChanged.connect(self._toggle_context_input)
         layout.addWidget(self.maximize_context_checkbox)
+
+        # --- Target Context Input ---
+        self.context_input_layout = QHBoxLayout()
+        self.context_input_layout.setContentsMargins(20, 0, 0, 0)
+
+        target_label = QLabel("Target Limit:")
+        target_label.setStyleSheet("color: #A0A0A0;")
+
+        # New Checkbox for Auto
+        self.auto_context_checkbox = QCheckBox("Auto (Max)")
+        self.auto_context_checkbox.setChecked(True)
+        self.auto_context_checkbox.setStyleSheet(WIDGET_STYLESHEET)
+        self.auto_context_checkbox.stateChanged.connect(self._toggle_spinbox_enabled)
+
+        self.target_context_spinbox = QSpinBox()
+        self.target_context_spinbox.setRange(512, 1000000)
+        self.target_context_spinbox.setSingleStep(1024)
+        self.target_context_spinbox.setEnabled(False)  # Default to disabled (Auto is checked)
+        self.target_context_spinbox.setStyleSheet("""
+            QSpinBox { 
+                background-color: #252930; 
+                color: #E0E0E0; 
+                border: 1px solid #505660; 
+                border-radius: 4px; 
+                padding: 4px; 
+            }
+            QSpinBox:disabled {
+                color: #505050;
+                border-color: #404040;
+                background-color: #2e333b;
+            }
+        """)
+        self.target_context_spinbox.setSuffix(" tokens")
+
+        self.context_input_layout.addWidget(target_label)
+        self.context_input_layout.addWidget(self.auto_context_checkbox)
+        self.context_input_layout.addWidget(self.target_context_spinbox)
+        self.context_input_layout.addStretch()
+
+        self.context_input_widget = QWidget()
+        self.context_input_widget.setLayout(self.context_input_layout)
+        layout.addWidget(self.context_input_widget)
+        # -----------------------------
 
         for widget in [self.goal_perf_radio, self.offload_single_gpu_radio, self.offload_multi_vram_radio,
                        self.offload_multi_cpu_radio, self.maximize_context_checkbox]:
@@ -190,6 +234,18 @@ class SummaryPanel(QWidget):
 
         layout.addStretch()
         return container
+
+    def _toggle_context_input(self, state):
+        # Master toggle for the whole context section (checkbox logic)
+        # If Maximize is unchecked, we disable the target inputs entirely?
+        # Or do we treat it as "Just use this target context"?
+        # Current logic suggests the latter is useful.
+        # But for now, let's just enable/disable the widget container.
+        self.context_input_widget.setEnabled(state == 2)
+
+    def _toggle_spinbox_enabled(self, state):
+        # 2 is Checked (Auto), so Spinbox should be Disabled
+        self.target_context_spinbox.setDisabled(state == 2)
 
     def populate(self, data):
         """Fills the summary panel and intelligently configures options based on analysis data."""
@@ -244,6 +300,11 @@ class SummaryPanel(QWidget):
         add_row(self.model_summary_layout, "Model Layers", data.get('model_layers', 'N/A'))
         add_row(self.model_summary_layout, "Model Max Context", f"{data.get('model_max_context', 'N/A'):,}")
 
+        # Update Spinbox Max to Model Max
+        model_max = int(data.get('model_max_context', 32768))
+        self.target_context_spinbox.setMaximum(model_max)
+        self.target_context_spinbox.setValue(model_max)  # Default if unchecked
+
         # --- REVISED LOGIC for enabling/disabling and recommending strategies ---
         VRAM_BUFFER_GB = 1.5
         model_size = data.get('model_size_gb', 999)
@@ -288,6 +349,9 @@ class SummaryPanel(QWidget):
         self.goal_perf_radio.setChecked(True)
         self.maximize_context_checkbox.setChecked(True)
 
+        # Reset Auto Checkbox to Checked
+        self.auto_context_checkbox.setChecked(True)
+
         while self.optimizations_layout.count():
             child = self.optimizations_layout.takeAt(0)
             if child.widget():
@@ -313,10 +377,17 @@ class SummaryPanel(QWidget):
                 if param_data:
                     selected_optimizations.update(param_data)
 
+        # Determine Context Target
+        if self.auto_context_checkbox.isChecked():
+            target_context = -1
+        else:
+            target_context = self.target_context_spinbox.value()
+
         choices = {
             'goal': 'performance',
             'offload_strategy': offload_map.get(self.offload_group.checkedId(), 'single_gpu'),
             'maximize_context': self.maximize_context_checkbox.isChecked(),
+            'target_context': target_context,
             'primary_gpu_id': selected_gpu_button.property("gpu_id") if selected_gpu_button else 0,
             'selected_optimizations': selected_optimizations
         }
