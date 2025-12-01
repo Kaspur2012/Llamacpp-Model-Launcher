@@ -331,6 +331,7 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 *   12/01/2025 - 
     *   significant to offload to cpu strategy, minor changes to the other 2 strategy
+    *   user has option to enter desired context in Tuning Assistant window, whether it will me met is another question. Auto is set to max or achieveable context.
 *   11/20/2025 - 
     *   added --mmproj parameter popup for qwen3 VL model during the initial starting of tuning
     *   minor refactoring, trying to make main_window.py smaller
