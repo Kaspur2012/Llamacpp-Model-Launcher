@@ -13,7 +13,7 @@ Magistral-Small-2509-UD-Q5_K_XL
 llama-server.exe -m D:\lm_studio\unsloth\Magistral-Small-2509-GGUF\Magistral-Small-2509-UD-Q5_K_XL.gguf --jinja -c 85000 -ngl 999 -fa on --temp 0.7 --top-k 40 --top-p 0.95 --min-p 0.01 --repeat-penalty 1.1 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup
 
 Mistral-Small-3.2-24B-Instruct-2506-UD-Q5_K_XL
-llama-server.exe -m D:/lm_studio/unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF/Mistral-Small-3.2-24B-Instruct-2506-UD-Q5_K_XL.gguf --jinja -c 75000 -ngl 999 -fa on --temp 0.15 --top-k 40-1 --top-p 1 --min-p 0.05 --repeat-penalty 1.1 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup -md D:/lm_studio/mradermacher/Mistral-Small-3.1-DRAFT-0.5B-GGUF/Mistral-Small-3.1-DRAFT-0.5B.Q4_K_M.gguf --device-draft CUDA0 --cache-type-k-draft q8_0 --cache-type-v-draft q8_0
+llama-server.exe -m D:/lm_studio/unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF/Mistral-Small-3.2-24B-Instruct-2506-UD-Q5_K_XL.gguf --jinja -c 75000 -ngl 999 -fa on --temp 0.15 --top-k 40 --top-p 1 --min-p 0.05 --repeat-penalty 1.1 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup -md D:/lm_studio/mradermacher/Mistral-Small-3.1-DRAFT-0.5B-GGUF/Mistral-Small-3.1-DRAFT-0.5B.Q4_K_M.gguf --device-draft CUDA0 --cache-type-k-draft q8_0 --cache-type-v-draft q8_0
 
 Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q5_K_XL
 llama-server.exe -m D:\lm_studio\unsloth\Qwen3-Coder-30B-A3B-Instruct-1M-GGUF\Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q5_K_XL.gguf --jinja -c 30000 -ngl 999 -fa on --temp 0.7 --top-k 20 --top-p 0.8 --min-p 0 --repeat-penalty 1.1 --no-mmap --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup --ubatch-size 2048 --split-mode none
@@ -33,11 +33,9 @@ llama-server.exe -m D:/lm_studio/unsloth/Qwen3-VL-30B-A3B-Thinking-GGUF/Qwen3-VL
 Qwen3-VL-30B-A3B-Thinking-UD-Q4_K_XL_VL
 llama-server.exe -m D:/lm_studio/unsloth/Qwen3-VL-30B-A3B-Thinking-GGUF/Qwen3-VL-30B-A3B-Thinking-UD-Q4_K_XL.gguf --jinja -c 15000 -ngl 999 -fa on --temp 0.7 --top-k 20 --top-p 0.8 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup --mmproj D:\llamacpp\mmproj-BF16.gguf
 
-Qwen3-VL-32B-Instruct.Q4_K_M_TEXT
-llama-server.exe -m D:/lm_studio/mradermacher/Qwen3-VL-32B-Instruct-GGUF/Qwen3-VL-32B-Instruct.Q4_K_M.gguf --jinja -c 30000 -ngl 999 -fa on --temp 1.0 --top-k 40 --top-p 1.0 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup
+Qwen3-VL-32B-Instruct.Q4_K_M_TEXT_GPU0
+llama-server.exe -m D:/lm_studio/mradermacher/Qwen3-VL-32B-Instruct-GGUF/Qwen3-VL-32B-Instruct.Q4_K_M.gguf --jinja -c 15480 -ngl 99 -fa on --temp 1.0 --top-k 40 --top-p 1.0 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --split-mode none --main-gpu 0 --no-warmup -md D:/lm_studio/lmstudio-community/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf --flash-attn on -ctk q8_0 -ctv q8_0 -ngld 99 --cache-type-k-draft q8_0 --cache-type-v-draft q8_0 -mg 0 -devd CUDA0
 
-Qwen3-VL-32B-Instruct.Q4_K_M_TEXT_DRAFT
-llama-server.exe -m D:/lm_studio/mradermacher/Qwen3-VL-32B-Instruct-GGUF/Qwen3-VL-32B-Instruct.Q4_K_M.gguf --jinja -c 15000 -fa on --temp 1.0 --top-k 40 --top-p 1.0 --min-p 0.05
 
 Qwen3-VL-32B-Instruct.Q4_K_M_VL
 llama-server.exe -m D:/lm_studio/mradermacher/Qwen3-VL-32B-Instruct-GGUF/Qwen3-VL-32B-Instruct.Q4_K_M.gguf --jinja -c 17000 -ngl 999 -fa on --temp 0.7 --top-k 20 --top-p 0.8 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup --mmproj D:\llamacpp\Qwen3-VL-32B-Instruct.mmproj-f16.gguf
@@ -84,8 +82,6 @@ llama-server.exe -m D:\lm_studio\unsloth\Llama-3.3-70B-Instruct-GGUF\Llama-3.3-7
 UIGEN-X-32B-0727.Q4_K_M
 llama-server.exe -m D:\lm_studio\mradermacher\UIGEN-X-32B-0727-GGUF\UIGEN-X-32B-0727.Q4_K_M.gguf --jinja -c 19000 -ngl 999 -fa on --temp 0.6 --top-k 40 --top-p 0.9 --min-p 0.05 --repeat-penalty 1.1 --no-mmap --split-mode none --main-gpu 0 --no-warmup
 
-aquif-3.5-Max-42B-A3B.i1-Q5_K_S
-llama-server.exe -m D:/lm_studio/mradermacher/aquif-3.5-Max-42B-A3B-i1-GGUF/aquif-3.5-Max-42B-A3B.i1-Q5_K_S.gguf --jinja -c 25000 -ngl 99 -fa on --temp 0.6 --top-k 20 --top-p 0.95 --min-p 0 --repeat-penalty 1.1 --cache-type-k q8_0 --cache-type-v q8_0 --no-mmap -ts 77/23 --main-gpu 0 --no-warmup
 
 gemma-3-27b-it-qat-UD-Q4_K_XL
 llama-server.exe -m D:\lm_studio\unsloth\gemma-3-27b-it-qat-GGUF\gemma-3-27b-it-qat-UD-Q4_K_XL.gguf --jinja -c 131000 -ngl 999 -fa on --temp 1 --top-k 64 --top-p 0.95 --min-p 0.05 --repeat-penalty 1.1 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup
@@ -111,4 +107,8 @@ llama-server.exe -m D:\lm_studio\bartowski\nvidia_Llama-3_3-Nemotron-Super-49B-v
 
 
 Tune Model Test
-llama-server.exe -m D:/lm_studio/mradermacher/Qwen3-VL-32B-Thinking-GGUF/Qwen3-VL-32B-Thinking.Q4_K_M.gguf --jinja -c 4096 --temp 0.1 --top-k 100 --top-p 0.95 --min-p 0.05 -md D:/lm_studio/lmstudio-community/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf --no-warmup
+llama-server.exe -m D:\lm_studio\bartowski\nvidia_Llama-3_3-Nemotron-Super-49B-v1_5-GGUF\nvidia_Llama-3_3-Nemotron-Super-49B-v1_5-Q4_K_S.gguf --jinja -c 4096 --temp 0.1 --top-k 100 --top-p 0.95 --min-p 0.05 -md D:/lm_studio/lmstudio-community/Llama-3.2-1B-Instruct-GGUF/Llama-3.2-1B-Instruct-Q4_K_M.gguf
+
+
+Qwen3-Next-80B-A3B-Thinking-UD-Q4_K_XL
+llama-server.exe -m D:/lm_studio/unsloth/Qwen3-Next-80B-A3B-Thinking-GGUF/Qwen3-Next-80B-A3B-Thinking-UD-Q4_K_XL.gguf -c 262144 --jinja --temp 0.6 --top-k 20 --top-p 0.95 --min-p 0 --no-warmup -ngl 99 -ctk q8_0 -ctv q8_0 --flash-attn on --no-mmap -mg 0 -ncmoe 21 -ts 0.848,0.152
