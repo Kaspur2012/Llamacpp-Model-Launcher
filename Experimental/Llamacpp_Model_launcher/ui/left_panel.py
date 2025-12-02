@@ -71,6 +71,7 @@ class LeftPanel(QWidget):
         self.tuning_wizard_button = QPushButton("Tune Model")
         self.tuning_wizard_button.setStyleSheet("font-weight: bold;")
         self.system_button = QPushButton('System')
+        self.system_button.setVisible(False)
         self.commands_button = QPushButton('Commands')
         self.help_button = QPushButton('Help')
         self.exit_button = QPushButton('Exit')
@@ -150,6 +151,7 @@ class LeftPanel(QWidget):
         self._set_view(0 if self._showing_summary else 3)
 
     def show_summary_view(self):
+        self.system_button.setVisible(True)
         self._set_view(3)
 
     def display_summary(self, data):
