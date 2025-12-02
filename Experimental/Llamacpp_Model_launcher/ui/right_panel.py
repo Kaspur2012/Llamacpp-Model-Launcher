@@ -179,6 +179,8 @@ class RightPanel(QWidget):
                                              QMessageBox.StandardButton.No)
                 if reply == QMessageBox.StandardButton.No:
                     return
+                else:
+                    break
 
         self.add_parameter_row(param_name, param_value if param_value else None)
         self.new_param_name_input.clear()
