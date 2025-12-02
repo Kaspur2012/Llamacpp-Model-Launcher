@@ -94,198 +94,121 @@ Features
 <summary><strong>⚙️ Tuning Overall Process - WIP</strong></summary>
 
 ```mermaid
-graph TD
-    %% Styles
-    classDef user fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef system fill:#e1f5fe,stroke:#0277bd,stroke-width:2px;
-    classDef logic fill:#fff9c4,stroke:#fbc02d,stroke-width:2px;
-    classDef error fill:#ffcdd2,stroke:#c62828,stroke-width:2px;
+flowchart TD
+    %% --- STYLING ---
+    classDef process fill:#2b2b2b,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef decision fill:#5e3a00,stroke:#ff9e16,stroke-width:2px,color:#fff;
+    classDef success fill:#1b4d1b,stroke:#4caf50,stroke-width:2px,color:#fff;
+    classDef failure fill:#4d1b1b,stroke:#ff4c4c,stroke-width:2px,color:#fff;
+    classDef logic fill:#0e3a5e,stroke:#4a9eff,stroke-width:2px,color:#fff,stroke-dasharray: 5 5;
 
-    Start((Start Tuning)) --> SysAnalysis[System Analyzer:<br>Probe CPU, RAM, GPUs]
-    SysAnalysis --> CheckSpecial{Special Model<br>Checks}
+    %% --- START ---
+    Start([Start Tuning Wizard]):::process --> Phase1
     
-    CheckSpecial -- "filename has 'vl'/'vision'" --> PromptVLM[Prompt User:<br>Select --mmproj?]
-    CheckSpecial -- "filename has 'gpt-oss'" --> SetGPTOss[Apply:<br>reasoning_effort: medium]
-    CheckSpecial -- "Draft Model set" --> SetDraft[Apply:<br>Draft Offload & Quantization]
-    
-    SetDraft --> Phase1
-    PromptVLM --> Phase1
-    SetGPTOss --> Phase1
-    CheckSpecial -->|None| Phase1
-    
-    subgraph Phase1 [Phase 1: Metadata Extraction]
-        LoadMini[Load Model with<br>-ngl 1, -c 4096]
-        ParseLog[Parse Log for:<br>n_layer, max_context, GPU Order]
-        
-        LoadMini --> Success1{Success?}
-        Success1 -- No --> CriticalFail(Abort Tuning)
-        Success1 -- Yes --> Reorder[Reconcile GPU Order<br>NVML vs Llama.cpp]
-    end
-
-    Reorder --> UserSummary[<b>Show Summary Panel</b><br>Display Stats & Recommendations]
-    UserSummary -->|User Clicks Run| Phase2
-    
-    subgraph Phase2 [Phase 2: Offload Strategy]
+    %% --- PHASE 1 & 2: SETUP ---
+    subgraph Phase1_2 [Phase 1 & 2: Analysis & Probe]
         direction TB
-        DecideStrat{User Strategy?}
-        DecideStrat -- Single GPU --> TuneSingle
-        DecideStrat -- Multi-VRAM --> TuneMultiVRAM
-        DecideStrat -- Multi-CPU --> TuneMultiCPU
-        
-        TuneSingle --> OffloadResult
-        TuneMultiVRAM --> OffloadResult
-        TuneMultiCPU --> OffloadResult
-        
-        OffloadResult{Offload<br>Found?}
-        OffloadResult -- No --> CriticalFail
+        Phase1[Extract Metadata]:::process -->|Get Layers & Max Ctx| P2_Probe
+        P2_Probe[Probe KV Cache Cost]:::process -->|Test -ngl 1, -c 4096| CalcCost
+        CalcCost[Calculate MB per Token]:::logic --> UserUI
+        UserUI[/User Selects Strategy & Goal/]:::process
     end
 
-    OffloadResult -- Yes --> Phase3
-    
-    subgraph Phase3 [Phase 3: Context Optimization]
-        BinaryCtx[Adaptive Context Search<br>Try Context Sizes: Low -> High]
-        LoadCtx[Load with Target Context]
+    UserUI --> Phase3_Decision
+
+    %% --- THE CORE ENGINE (REUSABLE) ---
+    subgraph TSEngine [The Core: TS Balancing Engine]
+        direction TB
+        desc_ts[Used by all strategies to run a test]
+        RunTest[Run Server & Load Model]:::process
+        RunTest --> IsSuccess{Success?}:::decision
         
-        LoadCtx --> OOM{OOM Error?}
-        OOM -- Yes --> Rebalance[Heuristic:<br>Adjust Tensor Split / Reduce Layers]
-        Rebalance --> LoadCtx
-        OOM -- No --> SaveCtx[Save Config &<br>Increase Context]
+        IsSuccess -- Yes --> ReturnSuccess([Return Params]):::success
+        IsSuccess -- No --> ErrorType{Error Type?}:::decision
+        
+        ErrorType -- Resource Guard --> ReturnFail([Fail: System RAM Full]):::failure
+        ErrorType -- Generic/Timeout --> ReturnFail
+        ErrorType -- OOM --> CheckDevice{Failing Device?}:::decision
+        
+        CheckDevice -->|Primary GPU| ShiftLoadSec[Shift 0.02 Load to Secondary]:::logic
+        CheckDevice -->|Secondary GPU| ShiftLoadPri[Shift 0.02 Load to Primary]:::logic
+        
+        ShiftLoadSec --> CheckPingPong{Ping-Pong detected?}:::decision
+        ShiftLoadPri --> CheckPingPong
+        
+        CheckPingPong -- No --> RunTest
+        CheckPingPong -- Yes --> Midpoint[Attempt Midpoint Refinement]:::logic
+        Midpoint --> RunTestMid[Run One-Shot Test]:::process
+        RunTestMid --> FinalCheck{Success?}:::decision
+        FinalCheck -- Yes --> ReturnSuccess
+        FinalCheck -- No --> ReturnFail
     end
 
-    SaveCtx --> Phase4
+    %% --- PHASE 3: OFFLOAD STRATEGY ---
+    Phase3_Decision{Offload Strategy?}:::decision
     
-    subgraph Phase4 [Phase 4: Benchmarking]
-        FinalLoad[Load Best Config]
-        APITest[Run 3x API Requests<br>Measure TPS]
-        StabilityCheck[Check for 'Soft Failure'<br>eval time = 0.00ms]
+    %% 3A: Single GPU
+    Phase3_Decision -- Single GPU --> StratSingle
+    StratSingle[Set -ngl 99, -sm none]:::process --> TSEngine
+    
+    %% 3B: Multi VRAM
+    Phase3_Decision -- Multi VRAM --> StratMultiVRAM
+    StratMultiVRAM[Calc 'Primary First' Split]:::logic --> SetSplit[Set -ngl 99, -ts calc]:::process
+    SetSplit --> TSEngine
+    
+    %% 3C: Multi CPU (Dense)
+    Phase3_Decision -- Multi CPU (Dense) --> StratDense
+    subgraph Strategy_Dense [Strategy: Dense w/ CPU Offload]
+        StratDense --> PredictNGL[Predict Optimal NGL based on VRAM]:::logic
+        PredictNGL --> TestPred[Test Predicted NGL]:::process
+        TestPred --> TSEngine
         
-        StabilityCheck --> Stable{Stable?}
-        Stable -- No --> CriticalFail
+        TSEngine -- Success --> GreedyFill[Greedy Fill: +2 Layers Loop]:::logic
+        GreedyFill -->|Until Fail| BestGreedy([Found Max NGL]):::success
+        
+        TSEngine -- Fail --> Recovery[Recovery: Drop Layers Loop]:::logic
+        Recovery -->|Until Stable| Climb[Recovery Climb: +1 Layer]:::logic
+        Climb --> BestRec([Found Max NGL]):::success
     end
-    
-    Stable -- Yes --> Finish(((Finish &<br>Save Params)))
 
-    class UserSummary,PromptVLM user;
-    class SysAnalysis,LoadMini,ParseLog,LoadCtx,FinalLoad,APITest system;
-    class CheckSpecial,Reorder,DecideStrat,BinaryCtx,Rebalance,StabilityCheck logic;
-    class CriticalFail error;
+    %% 3D: Multi CPU (MoE)
+    Phase3_Decision -- Multi CPU (MoE) --> StratMoE
+    subgraph Strategy_MoE [Strategy: MoE w/ CPU Offload]
+        StratMoE --> CoarseSearch[Coarse Search: Test -ncmoe 0, 5, 10...]:::process
+        CoarseSearch -->|Fail on GPU X| Crossover[Found Crossover Point]:::logic
+        Crossover --> FineTune[Fine Tune Loop]:::process
+        FineTune -->|Incr -ncmoe| TSEngine
+        TSEngine -->|Success| FoundMoE([Optimal -ncmoe & -ts]):::success
+    end
+
+    %% --- PHASE 4: CONTEXT ---
+    BestGreedy --> Phase4_Check
+    BestRec --> Phase4_Check
+    FoundMoE --> Phase4_Check
+    ReturnSuccess --> Phase4_Check
+    
+    subgraph Phase4 [Phase 4: Maximize Context]
+        Phase4_Check{Maximize Context?}:::decision
+        Phase4_Check -- No --> Phase5
+        Phase4_Check -- Yes --> DoubleLoop[Doubling Loop: 4k, 8k, 16k...]:::process
+        
+        DoubleLoop --> PredictDrop[Predictive Layer Drop]:::logic
+        PredictDrop -->|Reduce -ngl / Incr -ncmoe| RunCtxTest
+        RunCtxTest --> TSEngine
+        
+        TSEngine -- Success --> DoubleLoop
+        TSEngine -- Fail --> BinSearch[Binary Search Refinement]:::process
+        BinSearch --> FinalCtx([Final Context Params]):::success
+    end
+
+    %% --- PHASE 5: BENCHMARK ---
+    FinalCtx --> Phase5
+    Phase5[Phase 5: Benchmark]:::process --> RunBench[Run 3x API Requests]:::process
+    RunBench --> CalcTPS[Calculate Avg TPS]:::logic
+    CalcTPS --> End([Save & Finish]):::success
 ```
 </details>
 
-<details>
-<summary><strong>⚙️ The Offload Logic - WIP</strong></summary>
-
-```mermaid
-graph TD
-    %% Styles
-    classDef dense fill:#e1f5fe,stroke:#0277bd,stroke-width:2px;
-    classDef moe fill:#e0f2f1,stroke:#00695c,stroke-width:2px;
-    classDef fail fill:#ffcdd2,stroke:#c62828,stroke-width:2px;
-
-    Input(Input: Selected Strategy) --> StrategyCheck{Strategy Type}
-
-    %% --- SINGLE GPU LOGIC ---
-    StrategyCheck -- Single GPU --> S_TryFull[Try: -ngl 99<br>-sm none]
-    S_TryFull --> S_Success{Success?}
-    S_Success -- Yes --> ReturnParams
-    S_Success -- No --> S_Prompt[Prompt User:<br>Try Multi-GPU?]
-    S_Prompt -- Yes --> M_CPU_Entry
-    S_Prompt -- No --> Abort(Abort)
-
-    %% --- MULTI VRAM LOGIC ---
-    StrategyCheck -- Multi-GPU<br>VRAM Only --> V_Calc[Calc 'Primary-First'<br>Tensor Split]
-    V_Calc --> V_TryFull[Try: -ngl 99<br>-ts calculated]
-    V_TryFull --> V_Success{Success?}
-    V_Success -- Yes --> ReturnParams
-    V_Success -- No --> M_CPU_Entry(Fallback to<br>Multi-CPU)
-
-    %% --- MULTI CPU LOGIC ---
-    StrategyCheck -- Multi-GPU<br>CPU Offload --> M_CPU_Entry
-    
-    M_CPU_Entry --> ArchCheck{Model Arch?}
-    
-    %% Dense Sub-logic
-    ArchCheck -- Dense --> D_Binary[<b>Binary Search</b><br>Range: 0 to Total Layers]
-    subgraph DenseLogic [Dense Tuning]
-        D_Test[Test -ngl MID]
-        D_Test --> D_Res{Stable?}
-        D_Res -- Yes --> D_Save[Save Best -ngl<br>Try Higher]
-        D_Res -- No --> D_Lower[Try Lower]
-    end
-    D_Binary --> DenseLogic
-    DenseLogic --> ReturnParams
-
-    %% MoE Sub-logic
-    ArchCheck -- MoE --> M_Coarse[<b>Stage 1: Coarse Search</b><br>Find -ncmoe crossover]
-    subgraph MoELogic [MoE Tuning]
-        M_Step1[Test -ncmoe 0, 5, 10...]
-        M_Step1 --> M_Bottleneck{Bottleneck<br>Moved?}
-        M_Bottleneck -- Yes --> M_Fine[<b>Stage 2: Fine Tune</b><br>Adjust -ts & -ncmoe]
-        M_Fine --> M_Loop[Loop: OOM on Primary?<br>Inc -ncmoe<br>OOM on Secondary?<br>Adjust -ts]
-    end
-    M_Coarse --> MoELogic
-    MoELogic --> ReturnParams
-
-    class DenseLogic dense;
-    class MoELogic moe;
-    class Abort fail;
-```
-</details>
-<details>
-<summary><strong>⚙️ Adaptive Context Search - WIP</strong></summary>
-
-```mermaid
-graph TD
-    %% Styles
-    classDef action fill:#fff9c4,stroke:#fbc02d,stroke-width:2px;
-    classDef check fill:#e1f5fe,stroke:#0277bd,stroke-width:2px;
-    classDef fail fill:#ffcdd2,stroke:#c62828,stroke-width:2px;
-
-    Start(Start Context Tuning) --> Range[Set Range:<br>Low=4096, High=MaxModel]
-    
-    Range --> LoopCheck{Low <= High?}
-    LoopCheck -- No --> Finish(Return Best Params)
-    
-    LoopCheck -- Yes --> CalcMid[Calculate MID Context]
-    CalcMid --> TestLoad[Test Load with<br>-c MID]
-    
-    TestLoad --> Result{Result?}
-    
-    %% Success Path
-    Result -- Success --> SuccessAct[Store Config as Best<br>Low = Mid + 512]
-    SuccessAct --> LoopCheck
-    
-    %% Failure Path
-    Result -- OOM Error --> AnalyzeOOM[Analyze OOM Details]
-    
-    AnalyzeOOM --> StratCheck{Is Multi-GPU?}
-    
-    %% Single GPU OOM
-    StratCheck -- No --> Reduce[High = Mid - 512]
-    
-    %% Multi GPU OOM (The Smart Logic)
-    StratCheck -- Yes --> VictimCheck{Failing<br>Device?}
-    
-    VictimCheck -- Primary --> Rebal1[Action: Shift load to<br>Secondary GPU]
-    VictimCheck -- Secondary --> Rebal2[Action: Shift load to<br>Primary GPU]
-    
-    Rebal1 --> RetryLoad[Retry Load<br>Same Context]
-    Rebal2 --> RetryLoad
-    
-    RetryLoad --> RetryRes{Success?}
-    RetryRes -- Yes --> SuccessAct
-    RetryRes -- No --> LimitCheck{Max Retries<br>Reached?}
-    
-    LimitCheck -- No --> AnalyzeOOM
-    LimitCheck -- Yes --> Reduce
-
-    Reduce --> LoopCheck
-
-    class AnalyzeOOM,CalcMid,Rebal1,Rebal2 action;
-    class TestLoad,RetryLoad check;
-    class Reduce fail;
-```
-</details>
 
 ## Running the Application
 
