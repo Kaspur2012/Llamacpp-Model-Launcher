@@ -214,6 +214,15 @@ class SystemAnalyzer:
             yield f"> ERROR: Could not read model file. Reason: {e}"
             self.results["model_architecture"] = "Read Error"
 
+    def get_live_ram_usage(self):
+        """Returns free system RAM in GB as a float."""
+        if PSUTIL_AVAILABLE:
+            try:
+                return round(psutil.virtual_memory().available / (1024 ** 3), 2)
+            except Exception:
+                return 0.0
+        return 0.0
+
     def get_live_vram_usage(self):
         """
         Gets the current VRAM usage for all NVIDIA GPUs using pynvml.
