@@ -346,6 +346,100 @@ class TuningWizard:
                 yield {'action': 'log', 'message': "\n[PHASE 4] Maximizing Context Size (Adaptive Search)..."}
                 best_context_params = yield from self._tune_context_size_adaptive(final_params, strategy, user_target)
                 final_params = best_context_params
+
+        # --- PHASE 4.6: SAFE RESOURCE OVERHEAD (Precision Surgery) ---
+        if user_choices.get('ensure_safe_overhead', True):
+            yield {'action': 'log', 'message': "\n[PHASE 4.6] Analyzing System Resource Overhead..."}
+
+            # 1. Load the "Best" config so far
+            yield {'action': 'update_params', 'params': {**self.base_params, **final_params}}
+
+            # 2. Measure Live Resources
+            live_stats = yield {'action': 'measure_live_resources', 'timeout_ms': 30000}
+
+            if live_stats.get('success'):
+                # Define Safety Floors (User requirements)
+                VRAM_FLOOR_GB = 0.6  # 600 MB
+                RAM_FLOOR_GB = 1.0   # 1 GB
+
+                kv_cost = self.analysis.get('kv_mb_per_token', 0.0)
+                is_q8 = final_params.get('-ctk') == 'q8_0'
+                effective_kv_cost = kv_cost * (0.55 if is_q8 else 1.0)
+
+                strategy = user_choices.get('offload_strategy', 'single_gpu')
+                primary_id = self.primary_gpu_id
+
+                vram_info = live_stats.get('vram', {}) or {}
+                ram_free = live_stats.get('ram_free_gb', 0.0)
+
+                deficit_mb = 0.0
+                resource_name = ""
+
+                # --- STRATEGY-AWARE CHECK ---
+                if strategy == 'single_gpu':
+                    # Check Primary GPU only
+                    if primary_id in vram_info:
+                        free_gb = vram_info[primary_id]['total_gb'] - vram_info[primary_id]['used_gb']
+                        if free_gb < VRAM_FLOOR_GB:
+                            deficit_mb = (VRAM_FLOOR_GB - free_gb) * 1024
+                            resource_name = f"GPU {primary_id} VRAM"
+
+                elif strategy == 'multi_vram':
+                    # Check ALL GPUs - find the worst deficit
+                    for gid, info in vram_info.items():
+                        free_gb = info['total_gb'] - info['used_gb']
+                        if free_gb < VRAM_FLOOR_GB:
+                            local_deficit = (VRAM_FLOOR_GB - free_gb) * 1024
+                            if local_deficit > deficit_mb:
+                                deficit_mb = local_deficit
+                                resource_name = f"GPU {gid} VRAM"
+
+                elif strategy == 'multi_cpu':
+                    # Check ALL GPUs
+                    for gid, info in vram_info.items():
+                        free_gb = info['total_gb'] - info['used_gb']
+                        if free_gb < VRAM_FLOOR_GB:
+                            local_deficit = (VRAM_FLOOR_GB - free_gb) * 1024
+                            if local_deficit > deficit_mb:
+                                deficit_mb = local_deficit
+                                resource_name = f"GPU {gid} VRAM"
+
+                    # Also Check RAM
+                    if deficit_mb == 0 and ram_free < RAM_FLOOR_GB:
+                        deficit_mb = (RAM_FLOOR_GB - ram_free) * 1024
+                        resource_name = "System RAM"
+
+                # --- APPLY PRECISION CUT ---
+                if deficit_mb > 0:
+                    yield {'action': 'log', 'message': f"> Safety Alert: {resource_name} is below safe limits."}
+                    yield {'action': 'log', 'message': f"> Needed: {deficit_mb:.2f} MB cleared."}
+
+                    current_c = int(final_params.get('-c', 4096))
+                    tokens_to_drop = 0
+
+                    if effective_kv_cost > 0:
+                        # Precision Surgery
+                        tokens_to_drop = int(deficit_mb / effective_kv_cost)
+                        yield {'action': 'log', 'message': f"> Precision Calculation: Dropping {tokens_to_drop} tokens."}
+                    else:
+                        # Fallback: 15% Blind Cut
+                        tokens_to_drop = int(current_c * 0.15)
+                        yield {'action': 'log', 'message': "> KV Cost unknown. Applying fallback 15% cut."}
+
+                    # Apply and Round
+                    new_c = current_c - tokens_to_drop
+                    new_c = (new_c // 256) * 256 # Align to 256
+
+                    final_params['-c'] = str(new_c)
+                    yield {'action': 'log', 'message': f"> Adjusted Context: {current_c} -> {new_c}"}
+
+                    # Re-save best config
+                    self.best_config['params'] = final_params
+                else:
+                    yield {'action': 'log', 'message': "> Resource overhead is within safe limits."}
+            else:
+                 yield {'action': 'log', 'message': "> Could not measure live resources. Skipping safety check."}
+
         yield {'action': 'log', 'message': "\n[PHASE 5] Final Performance Benchmark..."}
 
         benchmark_result = yield from self._run_final_benchmark(final_params)
