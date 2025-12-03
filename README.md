@@ -2,7 +2,7 @@ Llamacpp-Model-Launcher
 
 The Llamacpp-Model-Launcher is a desktop application designed to simplify the process of managing and running your language models. It replaces the need for typing lengthy and complex commands into a terminal with an intuitive, point-and-click interface. You can easily manage, edit, delete, duplicate, and run all your language models.
 
-Please Note: This application was developed for Windows and has not been tested on other operating systems. Feel free to change code for other operating system, changes needed should not be much.
+Please Note: This application was developed for Windows+Nvidia and has not been tested on other operating systems. Feel free to change code for other operating system, changes needed should not be much.
 
 ![alt text](https://github.com/Kaspur2012/Llamacpp-Model-Launcher/blob/main/Main_UI.PNG)
 
