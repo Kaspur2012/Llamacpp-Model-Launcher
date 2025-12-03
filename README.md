@@ -252,6 +252,13 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 ##   Change Log
 
+*   12/03/2025 - 
+    *   Added new option to Tuning Assistant window:
+		*	Ensure Safe System Overhead:
+			*	checked by default
+			*	will check on best configuration found whether system reources(VRAM or RAM) are dangrously close to limit, if so will reduced desired/best context down accordingly
+			*	ensure there are at least 600MB of vram or 1GB of RAM avai
+			*	added this feature because the current tuning process will squeeze every last drop of your gpu vram and sometime it will OOM if you pass a ver long input context or interact with model for a long time.
 *   12/01/2025 - 
     *   significant changes to offload to cpu strategy, minor changes to the other 2 strategies
     *   user has option to enter desired context in Tuning Assistant window, whether it will me met is another question. Auto is set to max or achievable context.
