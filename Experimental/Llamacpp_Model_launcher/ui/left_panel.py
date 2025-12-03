@@ -128,6 +128,8 @@ class LeftPanel(QWidget):
     def set_tuning_mode(self, is_tuning):
         self._is_tuning = is_tuning
         if is_tuning:
+            self.webui_checkbox.setChecked(False)
+            self.open_on_load_checkbox.setChecked(False)
             self.tuning_wizard_button.setText("Cancel Tuning")
             self.tuning_wizard_button.setStyleSheet("background-color: #C62828; color: white; font-weight: bold;")
             self.tuning_wizard_button.setEnabled(True)  # Cancel must always be enabled
