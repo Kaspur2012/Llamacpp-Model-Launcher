@@ -183,6 +183,12 @@ class SummaryPanel(QWidget):
         self.maximize_context_checkbox.setToolTip(
             "Finds the largest possible context size (`-c`) that fits in your available memory for the chosen offload strategy.")
         self.maximize_context_checkbox.stateChanged.connect(self._toggle_context_input)
+        
+        self.safe_overhead_checkbox = QCheckBox("Ensure Safe Resource Overhead")
+        self.safe_overhead_checkbox.setToolTip("After finding max limits, reduces context to ensure 600MB VRAM and 1GB RAM remain free.")
+        self.safe_overhead_checkbox.setChecked(True)
+        self.safe_overhead_checkbox.setStyleSheet(WIDGET_STYLESHEET)
+        layout.addWidget(self.safe_overhead_checkbox)
         layout.addWidget(self.maximize_context_checkbox)
 
         # --- Target Context Input ---
@@ -387,6 +393,7 @@ class SummaryPanel(QWidget):
             'goal': 'performance',
             'offload_strategy': offload_map.get(self.offload_group.checkedId(), 'single_gpu'),
             'maximize_context': self.maximize_context_checkbox.isChecked(),
+            'ensure_safe_overhead': self.safe_overhead_checkbox.isChecked(),
             'target_context': target_context,
             'primary_gpu_id': selected_gpu_button.property("gpu_id") if selected_gpu_button else 0,
             'selected_optimizations': selected_optimizations
