@@ -365,6 +365,13 @@ class MainWindow(QWidget):
                         print(f"[DIAGNOSTICS] KV Probe finished. Captured data: {captured_data}")
                         self._advance_wizard()  # Just advance, the wizard checks the shared analysis dict
 
+                    elif self.wizard_current_is_viability_check == "resource_probe":
+                        result = getattr(self, 'wizard_resource_probe_result', None)
+                        if result is None:
+                            result = {'success': False, 'error': 'Server crashed or closed before measurement'}
+                        print(f"[DIAGNOSTICS] Resource probe finished. Result: {result}")
+                        self._advance_wizard(result)
+
                 except StopIteration:
                     self._finish_tuning_wizard()
 
@@ -438,6 +445,17 @@ class MainWindow(QWidget):
             self._advance_wizard(user_choice)
 
         # --- MODIFIED: Added probe_kv_stats to list of launch actions ---
+        elif action_type == 'measure_live_resources':
+            self.wizard_timer.stop()
+            self.wizard_is_benchmarking = True
+            self.wizard_current_is_viability_check = "resource_probe"
+            self.wizard_resource_probe_result = None
+            self.load_model()
+
+            timeout = action.get('timeout_ms', 60000)
+            self._setup_benchmark_timer()
+            self.benchmark_timeout_timer.start(timeout)
+
         elif action_type == 'extract_layer_count' or action_type == 'test_ngl_value' or action_type == 'load_and_benchmark' or action_type == 'probe_kv_stats':
             self.wizard_timer.stop()
             self.wizard_is_benchmarking = True
@@ -740,7 +758,17 @@ class MainWindow(QWidget):
             print(f"[DIAGNOSTICS] Detected 'model loaded' string.")
             if self.wizard_is_benchmarking and self.wizard_current_is_viability_check == "ngl_testing":
                 self._run_inference_stability_test()
-            elif self.wizard_is_benchmarking:
+            elif self.wizard_is_benchmarking and self.wizard_current_is_viability_check == "resource_probe":
+                try:
+                    analyzer = SystemAnalyzer()
+                    vram = analyzer.get_live_vram_usage()
+                    ram_free = analyzer.get_live_ram_usage()
+                    self.wizard_resource_probe_result = {'success': True, 'vram': vram, 'ram_free_gb': ram_free}
+                except Exception as e:
+                    self.wizard_resource_probe_result = {'success': False, 'error': str(e)}
+                print(f"[DIAGNOSTICS] Resource probe measurement taken. Unloading...")
+                self.unload_model()
+            elif self.wizard_is_benchmarking and self.wizard_current_is_viability_check != "kv_probe":
                 print("[DIAGNOSTICS] Calling _continue_wizard_benchmark().")
                 self._continue_wizard_benchmark()
             elif self.left_panel.open_on_load_checkbox.isChecked():
