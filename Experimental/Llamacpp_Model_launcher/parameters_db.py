@@ -76,6 +76,144 @@ This is where you can view and modify all aspects of the selected model's config
 
 **When I click "Load Model," nothing happens.**
 This almost always means the Llama.cpp Directory path is incorrect, often after updating Llama.cpp to a new version. Simply click the **Browse...** button and point the application to the new folder containing your updated `llama-server.exe`.
+
+### 5. Some stuff about -ot command
+## Mastering `llamacpp`'s `-ot` Command for Optimized Performance
+
+For enthusiasts and practitioners leveraging the power of `llamacpp` for local large language model inference, optimizing performance, especially on systems with limited VRAM, is a paramount concern. Among the arsenal of command-line arguments available, the `-ot` (or `--override-tensor`) command stands out as a powerful tool for fine-grained control over model layer offloading. This comprehensive guide will demystify the `-ot` command, its parameters, and provide practical examples to help you unlock its full potential.
+
+### The "-ot" Command: Precision Control Over Tensor Placement
+
+The primary function of the `-ot` command is to override the default behavior of `llamacpp`'s layer offloading. Instead of loading entire layers onto the GPU, this command allows you to specify precisely which tensors within the model should be allocated to a different memory buffer, most commonly the CPU. This granular control is particularly beneficial when dealing with large models that would otherwise exceed your GPU's VRAM capacity. By selectively keeping larger, less computationally intensive tensors on the CPU, you can free up precious VRAM for the more critical parts of the model, often leading to significant performance improvements.
+
+The syntax for the `-ot` command is as follows:
+
+```
+-ot <tensor_name_pattern>=<buffer_type>
+```
+
+Multiple overrides can be applied by separating them with commas or by using the `-ot` flag multiple times. The real power of this command lies in its use of C++ regular expressions (regex) for the `<tensor_name_pattern>`, enabling you to target specific tensors with surgical precision.
+
+### Demystifying the Parameters: Tensor Naming and Regex
+
+To effectively use the `-ot` command, it's crucial to understand the naming convention for tensors within `llamacpp` models and the basics of C++ regex.
+
+#### Tensor Naming Convention
+
+While a definitive, exhaustive list can be model-specific, a general and helpful naming scheme is employed in `llamacpp`:
+
+*   **`blk.<layer_number>`**: This prefix refers to a specific block or layer within the model. The `<layer_number>` is a zero-based index. For example, `blk.0` is the first layer, `blk.1` is the second, and so on.
+*   **`ffn`**: This stands for the Feed-Forward Network, a key component of each transformer block. FFN tensors are often quite large and can be good candidates for offloading to the CPU as they involve more basic matrix multiplications.
+*   **`ffn_down`, `ffn_gate`, `ffn_up`**: These are sub-tensors within the Feed-Forward Network.
+*   **`attn`**: This refers to the attention mechanism tensors, which are generally more computationally intensive and benefit from being on the GPU.
+*   **`exps`**: This is particularly relevant for Mixture-of-Experts (MoE) models and refers to the "expert" tensors. Offloading expert tensors to the CPU can be an effective strategy for running very large MoE models on consumer hardware.
+
+#### C++ Regex for Tensor Targeting
+
+The `<tensor_name_pattern>` uses C++'s `std::regex` syntax. Here are some common patterns and their meanings in the context of the `-ot` command:
+
+| Regex Pattern | Description |
+| :--- | :--- |
+| `.` | Matches any single character. |
+| `*` | Matches the preceding element zero or more times. |
+| `+` | Matches the preceding element one or more times. |
+| `[set]` | Matches any single character within the set. For example, `[0-9]` matches any digit. |
+| `(group)` | Groups a part of the pattern. |
+| `|` | Acts as an "OR" operator, matching the expression before or after it. |
+| `\` | Escapes a special character. For instance, `\.` matches a literal dot. |
+
+### Practical Examples and Use Cases
+
+Now, let's break down the commands from the Reddit post and explore other useful examples:
+
+*   **`-ot blk.([8-9]|[1-9][0-9]).ffn=CPU`**: This command offloads the Feed-Forward Network (`ffn`) tensors of specific layers to the CPU. Let's dissect the regex:
+    *   `blk\.`: Matches the literal string "blk.".
+    *   `([8-9]|[1-9][0-9])`: This is a clever way to select layers from 8 onwards. It matches either a single digit from 8 to 9, or a two-digit number from 10 to 99.
+    *   `\.ffn`: Matches the literal string ".ffn".
+    *   **In essence, this command keeps the FFN tensors for layers 8 and above on the CPU.**
+
+*   **`-ot ffn=CPU`**: This is a broader command that offloads all tensors containing "ffn" in their name to the CPU. This is a simple way to move all Feed-Forward Network components off the GPU.
+
+*   **`-ot exps=CPU`**: As mentioned earlier, this is highly effective for Mixture-of-Experts models. It offloads all "expert" tensors to the CPU, which can dramatically reduce VRAM usage.
+
+*   **`-ot blk.2.ffn_down_exps.weight=CPU`**: This is a very specific command that targets the `ffn_down_exps.weight` tensor within the 3rd layer (`blk.2`) and moves it to the CPU.
+
+**More Advanced Examples:**
+
+*   **`-ot "blk\.(1[0-9]|2[0-9]|30)\.ffn_.*=CPU"`**: This command would offload all FFN-related tensors (since `.*` matches any character zero or more times) for layers 10 through 30 to the CPU.
+*   **`-ot ".*\.ffn_(gate|up)=CPU"`**: This regex targets the `ffn_gate` and `ffn_up` tensors across all layers and offloads them to the CPU, while potentially leaving the `ffn_down` tensors on the GPU.
+
+### How to Determine Which Tensors to Offload
+
+The decision of which tensors to offload depends on your specific hardware and the model you are running. Here's a general strategy:
+
+1.  **Identify VRAM Bottlenecks**: If a model doesn't fit in your VRAM, the `-ot` command is your friend.
+2.  **Prioritize Attention Tensors for GPU**: Attention mechanism tensors are typically more computationally intensive and benefit most from GPU acceleration.
+3.  **Experiment with FFN Offloading**: Feed-Forward Network tensors are often large and less demanding on the GPU's parallel processing capabilities, making them prime candidates for CPU offloading.
+4.  **Consider MoE Expert Offloading**: For Mixture-of-Experts models, offloading the expert layers (`exps`) is a very effective strategy to reduce VRAM consumption.
+
+By understanding and strategically utilizing the `-ot` command, you can push the boundaries of your hardware and run larger, more capable language models locally with `llamacpp`. Experiment with different regex patterns and tensor targets to find the optimal configuration for your setup and enjoy a smoother, more efficient inference experience.
+
+code to print out large/all tensor for model:
+
+# A simple script to read a GGUF model file and list its tensors by size.
+
+from gguf import GGUFReader
+
+# --- IMPORTANT ---
+# Change this path to the full path of YOUR model file.
+# Use forward slashes / instead of backslashes \.
+MODEL_PATH = "D:/lm_studio/unsloth/Llama-3.3-70B-Instruct-GGUF/Llama-3.3-70B-Instruct-UD-IQ3_XXS.gguf"
+
+print(f"Reading tensors from: {MODEL_PATH}\n")
+
+# Open the model file for reading
+reader = GGUFReader(MODEL_PATH, 'r')
+
+# Get all the tensor info
+tensors = reader.tensors
+
+# Calculate the size (total number of parameters) for each tensor
+tensor_sizes = []
+for tensor in tensors:
+    # Shape is a list of dimensions, e.g., [32000, 4096]
+    # We multiply all dimensions to get the total parameter count
+    param_count = 1
+    for dim in tensor.shape:
+        param_count *= dim
+    tensor_sizes.append((tensor.name, param_count, tensor.shape))
+
+# Sort the tensors from largest to smallest
+sorted_tensors = sorted(tensor_sizes, key=lambda item: item[1], reverse=True)
+
+# Print the top 10 largest tensors
+print("--- Top 10 Largest Tensors ---")
+for i in range(min(10, len(sorted_tensors))):
+    name, size, shape = sorted_tensors[i]
+    print(f"{i+1}. Name: {name:<30} | Parameters: {size:>12,} | Shape: {shape}")
+# Print All
+# for i in range(len(sorted_tensors)):
+#     name, size, shape = sorted_tensors[i]
+#     print(f"{i+1}. Name: {name:<30} | Parameters: {size:>12,} | Shape: {shape}")
+
+-------------------------------------------------------------------------------------
+
+
+Some examples: 
+
+
+-ot token_embd.weight=CUDA0
+put token_embd.weight onto gpu 0, normally token_embd.weight is more dense and often benefit offload to higher performing gpu
+
+-ot blk.[0-9].ffn_gate.weight=CUDA0
+put ffn_gate.weight of first 9 layer onto gpu 0
+
+-ot blk.[1-7][0-9].ffn_gate.weight=CUDA0
+put ffn_gate.weight of first 80 layer onto gpu 0
+
+-ot blk.[0-9].ffn_up.weight=CUDA0
+
+-ot blk.[0-9].ffn_down.weight=CUDA0
 """
 
 
