@@ -374,15 +374,20 @@ class TuningWizard:
 
                 deficit_mb = 0.0
                 resource_name = ""
+                adjustment_made = False
 
                 # --- STRATEGY-AWARE CHECK ---
                 if strategy == 'single_gpu':
-                    # Check Primary GPU only
-                    if primary_id in vram_info:
-                        free_gb = vram_info[primary_id]['total_gb'] - vram_info[primary_id]['used_gb']
+                    # Fix: Use the NVML ID mapping to find the correct Physical GPU
+                    target_gpu = next((g for g in self.analysis.get('gpus', []) if g['id'] == primary_id), None)
+                    # Use preserved nvml_id if available, otherwise fallback to id
+                    lookup_id = target_gpu.get('nvml_id', primary_id) if target_gpu else primary_id
+
+                    if lookup_id in vram_info:
+                        free_gb = vram_info[lookup_id]['total_gb'] - vram_info[lookup_id]['used_gb']
                         if free_gb < VRAM_FLOOR_GB:
                             deficit_mb = (VRAM_FLOOR_GB - free_gb) * 1024
-                            resource_name = f"GPU {primary_id} VRAM"
+                            resource_name = f"GPU {primary_id} (Physical {lookup_id}) VRAM"
 
                 elif strategy == 'multi_vram':
                     # Check ALL GPUs - find the worst deficit
@@ -395,7 +400,8 @@ class TuningWizard:
                                 resource_name = f"GPU {gid} VRAM"
 
                 elif strategy == 'multi_cpu':
-                    # Check ALL GPUs
+                    vram_danger = False
+                    # Check ALL GPUs for VRAM deficit
                     for gid, info in vram_info.items():
                         free_gb = info['total_gb'] - info['used_gb']
                         if free_gb < VRAM_FLOOR_GB:
@@ -403,13 +409,34 @@ class TuningWizard:
                             if local_deficit > deficit_mb:
                                 deficit_mb = local_deficit
                                 resource_name = f"GPU {gid} VRAM"
+                                vram_danger = True
 
-                    # Also Check RAM
-                    if deficit_mb == 0 and ram_free < RAM_FLOOR_GB:
-                        deficit_mb = (RAM_FLOOR_GB - ram_free) * 1024
-                        resource_name = "System RAM"
+                    # Smart Overflow: Check if we can shift to RAM instead of cutting context
+                    # If VRAM is low but RAM is fine (> 1GB), shift 1 layer/expert.
+                    if vram_danger and ram_free > RAM_FLOOR_GB:
+                        if '-ncmoe' in final_params:
+                            cur = int(final_params['-ncmoe'])
+                            final_params['-ncmoe'] = str(cur + 1)
+                            yield {'action': 'log', 'message': f"> Safety Balance: Increasing -ncmoe to {cur + 1} to relieve VRAM (RAM is available)."}
+                            adjustment_made = True
+                        elif '-ngl' in final_params:
+                            cur = int(final_params['-ngl'])
+                            if cur > 0:
+                                final_params['-ngl'] = str(cur - 1)
+                                yield {'action': 'log', 'message': f"> Safety Balance: Reducing -ngl to {cur - 1} to relieve VRAM (RAM is available)."}
+                                adjustment_made = True
 
-                # --- APPLY PRECISION CUT ---
+                        if adjustment_made:
+                            deficit_mb = 0.0 # Prevent context cut
+                            self.best_config['params'] = final_params
+
+                    # If we didn't shift, check RAM danger
+                    if not adjustment_made:
+                        if deficit_mb == 0 and ram_free < RAM_FLOOR_GB:
+                            deficit_mb = (RAM_FLOOR_GB - ram_free) * 1024
+                            resource_name = "System RAM"
+
+                # --- APPLY PRECISION CUT (If needed) ---
                 if deficit_mb > 0:
                     yield {'action': 'log', 'message': f"> Safety Alert: {resource_name} is below safe limits."}
                     yield {'action': 'log', 'message': f"> Needed: {deficit_mb:.2f} MB cleared."}
@@ -435,12 +462,14 @@ class TuningWizard:
 
                     # Re-save best config
                     self.best_config['params'] = final_params
-                else:
+                    adjustment_made = True
+
+                if not adjustment_made:
                     yield {'action': 'log', 'message': "> Resource overhead is within safe limits."}
             else:
                  yield {'action': 'log', 'message': "> Could not measure live resources. Skipping safety check."}
 
-        yield {'action': 'log', 'message': "\n[PHASE 5] Final Performance Benchmark..."}
+        yield {'action': 'log', 'message': '[PHASE 5] Final Performance Benchmark...'}
 
         benchmark_result = yield from self._run_final_benchmark(final_params)
 
@@ -926,11 +955,13 @@ class TuningWizard:
             return {'success': False, 'tps': 0.0}
 
     def _get_best_gpu_id(self):
-        gpus = self.analysis.get('gpus', []);
+        gpus = self.analysis.get('gpus', [])
         if not gpus: return 0
         try:
-            return max(gpus, key=lambda gpu: gpu.get('vram', {}).get('total_gb', 0))['id']
-        except (ValueError, KeyError):
+            # Prioritize Compute Capability, then VRAM
+            best_gpu = sorted(gpus, key=lambda g: (g.get('compute_cap', 0), g.get('vram', {}).get('total_gb', 0)), reverse=True)[0]
+            return best_gpu['id']
+        except (ValueError, KeyError, IndexError):
             return 0
 
     def _reorder_gpu_list(self, ground_truth_gpus):
@@ -955,6 +986,8 @@ class TuningWizard:
             truth_name_clean = clean_name(truth_gpu.get('name', ''))
             if truth_name_clean in original_map:
                 matched_gpu = original_map[truth_name_clean];
+                # Preserve Physical ID before overwriting with Logical ID
+                matched_gpu['nvml_id'] = matched_gpu['id']
                 matched_gpu['id'] = truth_gpu['id']
                 reordered_gpus.append(matched_gpu)
                 unmatched_gpus = [g for g in unmatched_gpus if clean_name(g.get('name', '')) != truth_name_clean]
