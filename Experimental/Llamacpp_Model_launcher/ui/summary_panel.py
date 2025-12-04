@@ -280,14 +280,17 @@ class SummaryPanel(QWidget):
                 if child.widget():
                     child.widget().deleteLater()
 
-            recommended_gpu_id = max(gpus, key=lambda gpu: gpu.get('vram', {}).get('total_gb', 0))['id']
+            # Sort by Compute Capability (desc), then VRAM (desc)
+            recommended_gpu_id = sorted(gpus, key=lambda g: (g.get('compute_cap', 0), g.get('vram', {}).get('total_gb', 0)), reverse=True)[0]['id']
 
             for i, gpu in enumerate(gpus):
                 if gpu['id'] == recommended_gpu_id:
                     primary_gpu = gpu
                 vram = gpu.get('vram', {})
+                cc = gpu.get('compute_cap', 0.0)
+                cc_str = f"[CC {cc}]" if cc > 0 else ""
                 vram_str = f"({vram.get('used_gb', 0.0):.1f}/{vram.get('total_gb', 0.0):.1f} GB VRAM)"
-                add_row(self.system_summary_layout, f"GPU {gpu['id']}", f"{gpu['name']} {vram_str}")
+                add_row(self.system_summary_layout, f"GPU {gpu['id']}", f"{gpu['name']} {cc_str} {vram_str}")
                 is_recommended = gpu['id'] == recommended_gpu_id
                 radio_text = f"{gpu['name']} {vram_str}" + (" (Recommended)" if is_recommended else "")
                 radio_button = QRadioButton(radio_text)
