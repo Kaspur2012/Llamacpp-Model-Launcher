@@ -103,8 +103,16 @@ class SystemAnalyzer:
             total_gb = round(mem_info.total / (1024 ** 3), 2)
             used_gb = round(mem_info.used / (1024 ** 3), 2)
             free_gb = round(mem_info.free / (1024 ** 3), 2)
+
+            # Fetch Compute Capability (Try pynvml, fail silently to 0.0)
+            try:
+                major, minor = pynvml.nvmlDeviceGetCudaComputeCapability(handle)
+                compute_cap = float(f"{major}.{minor}")
+            except (AttributeError, pynvml.NVMLError):
+                compute_cap = 0.0
+
             vram_details = {"total_gb": total_gb, "used_gb": used_gb, "free_gb": free_gb}
-            self.results["gpus"].append({"id": i, "name": name.strip(), "vram": vram_details})
+            self.results["gpus"].append({"id": i, "name": name.strip(), "vram": vram_details, "compute_cap": compute_cap})
             yield f"  - GPU {i}: {name.strip()} ({total_gb} GB VRAM, {free_gb} GB free)"
 
     def _get_gpu_info_fallback(self):
