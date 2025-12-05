@@ -41,7 +41,6 @@ class MainWindow(QWidget):
         self.model_manager = ModelManager(self.models_file)
         self.command_builder = CommandBuilder()
 
-        self.wizard_confirm_each_step = False
         self.analysis_results = None
         self.wizard_generator = None
         self.wizard_timer = QTimer(self)
@@ -93,7 +92,11 @@ class MainWindow(QWidget):
         self.wizard_found_layers = None
         self.wizard_found_context = None
         self.wizard_error_details = None
+        self.wizard_found_expert_count = False
+        self.wizard_found_qwen3vl = False
         self.wizard_found_gpus = []
+        self.wizard_found_expert_count = False
+        self.wizard_found_qwen3vl = False
         self.wizard_tps_results = []
         self.benchmark_timeout_timer = None
         self.wizard = None
@@ -164,6 +167,13 @@ class MainWindow(QWidget):
         self.left_panel.set_tuning_mode(False)
         self.update_button_states()
 
+    def log_diagnostic(self, message):
+        # Print to console for debugging
+        print(message)
+        # Append to UI for the user to see progress
+        if hasattr(self, 'left_panel'):
+            self.left_panel.append_output(message)
+
     def handle_stdout(self):
         try:
             data = self.process.readAllStandardOutput().data().decode('utf-8', errors='ignore');
@@ -172,7 +182,7 @@ class MainWindow(QWidget):
 
             if self.analysis_results is not None:
                 # 1. Capture KV Stats
-                kv_matches = self.kv_cache_regex.finditer(self.output_buffer)
+                kv_matches = self.kv_cache_regex.finditer(self.output_buffer) if self.wizard_current_is_viability_check == 'kv_probe' else []
                 found_new_kv = False
                 for match in kv_matches:
                     try:
@@ -242,6 +252,31 @@ class MainWindow(QWidget):
                     except (ValueError, IndexError):
                         pass
 
+                # --- NEW: Truth-based Architecture Detection ---
+
+                # --- NEW: Truth-based Architecture Detection (Strict Value Check) ---
+                moe_match = re.search(r"\.expert_count\s+u32\s+=\s+(\d+)", self.output_buffer)
+                if not self.wizard_found_expert_count and moe_match:
+                    count = int(moe_match.group(1))
+                    if count > 0:
+                        self.wizard_found_expert_count = True
+                        self.left_panel.append_output(f"[WIZARD] Detected MoE signature (Count: {count}).")
+
+                # --- NEW: Truth-based Architecture Detection (print_info) ---
+                n_expert_match = re.search(r"print_info:\s+n_expert\s+=\s+(\d+)", self.output_buffer)
+                if not self.wizard_found_expert_count and n_expert_match:
+                    count = int(n_expert_match.group(1))
+                    if count > 0:
+                        self.wizard_found_expert_count = True
+                        self.left_panel.append_output(f"[WIZARD] Detected MoE signature (n_expert = {count}).")
+                if not self.wizard_found_qwen3vl and "qwen3vl" in self.output_buffer.lower():
+
+                    self.wizard_found_qwen3vl = True
+
+                    self.left_panel.append_output("[WIZARD] Detected Qwen3-VL signature.")
+
+                # -----------------------------------------------
+
                 context_match = self.context_length_regex.search(self.output_buffer)
                 if context_match and self.wizard_found_context is None:
                     try:
@@ -285,7 +320,7 @@ class MainWindow(QWidget):
                         'size_mib': size_mib,
                         'device_id': device_id
                     }
-                    print(f"[DIAGNOSTICS] Captured OOM error: {self.wizard_error_details}")
+                    self.log_diagnostic(f"[DIAGNOSTICS] Captured OOM error: {self.wizard_error_details}")
 
         except Exception as e:
             self.output_buffer += f"\n--- Error reading output: {e} ---\n"
@@ -297,7 +332,7 @@ class MainWindow(QWidget):
         original_status_label = self.left_panel.status_label.text()
         log_msg = "\n" + "=" * 80 + f"\n--- Process Finished ---"
         self.left_panel.append_output(log_msg)
-        print(f"[DIAGNOSTICS] QProcess finished signal received. Original status: {original_status_label}")
+        self.log_diagnostic(f"[DIAGNOSTICS] QProcess finished signal received. Original status: {original_status_label}")
         if self.temp_batch_file and os.path.exists(self.temp_batch_file):
             try:
                 os.remove(self.temp_batch_file);
@@ -322,10 +357,81 @@ class MainWindow(QWidget):
                             'layers': self.wizard_found_layers,
                             'gpus': self.wizard_found_gpus,
                             'max_context': self.wizard_found_context,
+                            'is_moe': self.wizard_found_expert_count,
+                            'is_qwen3vl': self.wizard_found_qwen3vl,
                             'error': '' if (
                                     self.wizard_found_layers and self.wizard_found_context) else 'Could not find all required metadata'
                         }
-                        print(f"[DIAGNOSTICS] Layer extraction finished. Result: {result}")
+                        self.log_diagnostic(f"[DIAGNOSTICS] Layer extraction finished. Result: {result}")
+                        
+                        # --- NEW: Interactive Prompts based on Truth ---
+                        current_params = {p.key: p.value for p in self.right_panel.get_parameters()}
+
+                        # 1. Vision Check (Qwen3-VL specific)
+                        if self.wizard_found_qwen3vl and '--mmproj' not in current_params:
+                            reply = QMessageBox.question(
+                                self, "Vision Model Detected",
+                                "This model appears to be a Vision Language Model (Qwen3-VL).\nTo use image inputs, a Multimodal Projector (--mmproj) is required.\n\nDo you want to select one now?",
+                                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No
+                            )
+                            if reply == QMessageBox.StandardButton.Yes:
+                                mmproj_file, _ = QFileDialog.getOpenFileName(self, "Select Multimodal Projector", "", "GGUF Files (*.gguf);;All Files (*.*)")
+                                if mmproj_file:
+                                    self._update_editor_params({'--mmproj': mmproj_file})
+                                    self.wizard.initial_params['--mmproj'] = mmproj_file
+
+                        # 2. Draft Model Check (Dense)
+                        if not self.wizard_found_expert_count and '-md' not in current_params and '--model-draft' not in current_params:
+                            reply = QMessageBox.question(
+                                self, "Speculative Decoding", 
+                                "This model appears to be Dense (Non-MoE).\nDo you want to select a Draft Model for Speculative Decoding optimization?",
+                                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No
+                            )
+                            if reply == QMessageBox.StandardButton.Yes:
+                                draft_file, _ = QFileDialog.getOpenFileName(self, "Select Draft Model File", "", "GGUF Files (*.gguf)")
+                                if draft_file:
+                                    self._update_editor_params({'-md': draft_file})
+                                    self.wizard.initial_params['-md'] = draft_file
+
+                        
+                        # --- NEW: Conflict Resolution (Vision vs Draft) ---
+                        # Re-read params to catch user selections from prompts above
+                        current_params_map = {p.key: p.value for p in self.right_panel.get_parameters()}
+                        has_vision = '--mmproj' in current_params_map
+                        has_draft = '-md' in current_params_map or '--model-draft' in current_params_map
+
+                        if has_vision and has_draft:
+                            box = QMessageBox(self)
+                            box.setIcon(QMessageBox.Icon.Warning)
+                            box.setWindowTitle("Incompatible Features")
+                            box.setText("Vision Models (--mmproj) and Speculative Decoding (-md) are generally incompatible or unstable when used together.")
+                            box.setInformativeText("Please choose which feature to keep for this tuning session:")
+
+                            btn_vision = box.addButton("Keep Vision Only", QMessageBox.ButtonRole.ActionRole)
+                            btn_draft = box.addButton("Keep Draft Only", QMessageBox.ButtonRole.ActionRole)
+
+                            box.exec()
+
+                            if box.clickedButton() == btn_vision:
+                                # Remove Draft params
+                                self._update_editor_params({
+                                    '-md': 'REMOVE', 
+                                    '--model-draft': 'REMOVE', 
+                                    '-ngld': 'REMOVE', 
+                                    '--cache-type-k-draft': 'REMOVE', 
+                                    '--cache-type-v-draft': 'REMOVE'
+                                })
+                                # Update wizard memory
+                                if '-md' in self.wizard.initial_params: del self.wizard.initial_params['-md']
+                                if '--model-draft' in self.wizard.initial_params: del self.wizard.initial_params['--model-draft']
+                                self.left_panel.append_output("[WIZARD] Removed Draft Model to prioritize Vision.")
+                            else:
+                                # Remove Vision params
+                                self._update_editor_params({'--mmproj': 'REMOVE'})
+                                # Update wizard memory
+                                if '--mmproj' in self.wizard.initial_params: del self.wizard.initial_params['--mmproj']
+                                self.left_panel.append_output("[WIZARD] Removed Vision Projector to prioritize Speculative Decoding.")
+
                         self._advance_wizard(result)
 
                     elif self.wizard_current_is_viability_check == "ngl_testing":
@@ -351,7 +457,7 @@ class MainWindow(QWidget):
                         # Pass back tracked usage data
                         result = {
                             'success': was_successful,
-                            'error_details': self.wizard_error_details,
+                            'error_details': self.wizard_error_details or {},
                             'resource_usage': {
                                 'cpu_mib': self.detected_cpu_usage_mib,
                                 'gpu_mib': self.detected_gpu_usage_mib
@@ -362,14 +468,14 @@ class MainWindow(QWidget):
                     elif self.wizard_current_is_viability_check == "kv_probe":
                         # Probe is considered successful if we captured any KV data, regardless of clean exit
                         captured_data = self.analysis_results.get('kv_mb_per_token', 0.0) > 0
-                        print(f"[DIAGNOSTICS] KV Probe finished. Captured data: {captured_data}")
+                        self.log_diagnostic(f"[DIAGNOSTICS] KV Probe finished. Captured data: {captured_data}")
                         self._advance_wizard()  # Just advance, the wizard checks the shared analysis dict
 
                     elif self.wizard_current_is_viability_check == "resource_probe":
                         result = getattr(self, 'wizard_resource_probe_result', None)
                         if result is None:
                             result = {'success': False, 'error': 'Server crashed or closed before measurement'}
-                        print(f"[DIAGNOSTICS] Resource probe finished. Result: {result}")
+                        self.log_diagnostic(f"[DIAGNOSTICS] Resource probe finished. Result: {result}")
                         self._advance_wizard(result)
 
                 except StopIteration:
@@ -382,7 +488,7 @@ class MainWindow(QWidget):
                 result['params_used'] = dict(current_params_list)
                 log_msg = f"[WIZARD CRITICAL] Server crashed during load. Aborting this step."
                 self.left_panel.append_output(log_msg)
-                print(f"[DIAGNOSTICS] Server crashed. Sending failure result to wizard generator.")
+                self.log_diagnostic(f"[DIAGNOSTICS] Server crashed. Sending failure result to wizard generator.")
                 self._advance_wizard(result)
 
     def _advance_wizard(self, send_value=None):
@@ -404,7 +510,7 @@ class MainWindow(QWidget):
 
     def _process_wizard_action(self, action):
         """Processes a single action dictionary from the wizard."""
-        print(f"[DIAGNOSTICS] Wizard action received: {action}")
+        self.log_diagnostic(f"[DIAGNOSTICS] Wizard action received: {action}")
 
         action_type = action.get('action')
 
@@ -465,6 +571,8 @@ class MainWindow(QWidget):
                 self.wizard_found_layers = None
                 self.wizard_found_context = None
                 self.wizard_found_gpus = []
+                self.wizard_found_expert_count = False
+                self.wizard_found_qwen3vl = False
             elif action_type == 'test_ngl_value':
                 self.wizard_current_is_viability_check = "ngl_testing"
                 self.wizard_error_details = None
@@ -689,7 +797,7 @@ class MainWindow(QWidget):
         self.captured_kv_entries = []
 
         log_msg = f"Working Dir: {self.llamacpp_dir}\nExecuting Command: {command_str}\n\n" + "=" * 80 + "\n"
-        self.left_panel.clear_output();
+        if not self.wizard_generator: self.left_panel.clear_output();
         self.left_panel.append_output(log_msg)
         print(f"\n[DIAGNOSTICS] LAUNCHING SERVER\n[DIAGNOSTICS] > {command_str}\n")
         if not self.left_panel.webui_checkbox.isChecked() and '--no-webui' not in command_str:
@@ -717,10 +825,12 @@ class MainWindow(QWidget):
         if not self.output_buffer: self.output_update_timer.stop(); return
         text_to_append = self.output_buffer;
         self.output_buffer = ""
-        self.left_panel.append_output(text_to_append)
+        # Only show raw output if we are NOT running the wizard
+        if self.wizard_generator is None and not self.wizard_is_benchmarking:
+            self.left_panel.append_output(text_to_append)
         if self.wizard_is_benchmarking and self.wizard_current_is_viability_check == "ngl_testing":
             if self.soft_failure_regex.search(text_to_append):
-                print("[DIAGNOSTICS] Soft failure artifact detected. Flagging for failure.")
+                self.log_diagnostic("[DIAGNOSTICS] Soft failure artifact detected. Flagging for failure.")
                 self.left_panel.append_output("[WIZARD] **Detected unstable server signature (soft failure).**")
                 self.wizard_saw_soft_failure_artifact = True
         if self.wizard_is_benchmarking and not self.wizard_current_is_viability_check and len(
@@ -729,15 +839,15 @@ class MainWindow(QWidget):
             for match in matches:
                 try:
                     tps_value = float(match)
-                    if tps_value > 5000: print(f"[DIAGNOSTICS] Discarding unrealistic TPS value: {tps_value}"); continue
+                    if tps_value > 5000: self.log_diagnostic(f"[DIAGNOSTICS] Discarding unrealistic TPS value: {tps_value}"); continue
                     self.wizard_tps_results.append(tps_value)
                     log_msg = f"[WIZARD] Found TPS value: {tps_value:.2f}. ({len(self.wizard_tps_results)}/3)"
                     self.left_panel.append_output(log_msg)
-                    print(f"[DIAGNOSTICS] Regex matched: {tps_value:.2f} t/s.")
+                    self.log_diagnostic(f"[DIAGNOSTICS] Regex matched: {tps_value:.2f} t/s.")
                     if len(self.wizard_tps_results) >= 3:
                         if self.benchmark_timeout_timer and self.benchmark_timeout_timer.isActive(): self.benchmark_timeout_timer.stop()
                         self.left_panel.append_output("[WIZARD] Collected 3 TPS values. Finalizing benchmark.")
-                        print("[DIAGNOSTICS] Collected 3/3 TPS values. Calculating average.")
+                        self.log_diagnostic("[DIAGNOSTICS] Collected 3/3 TPS values. Calculating average.")
                         avg_tps = sum(self.wizard_tps_results) / len(self.wizard_tps_results)
                         result = {'success': True, 'avg_tps': avg_tps, 'error': ''}
                         current_params_list = [p._asdict() for p in self.right_panel.get_parameters()]
@@ -747,15 +857,16 @@ class MainWindow(QWidget):
                 except (ValueError, IndexError):
                     pass
         if self.wizard_awaiting_idle_signal and self.idle_regex.search(text_to_append):
-            print("[DIAGNOSTICS] 'all slots are idle' signal detected. Asking for user confirmation.")
+            self.log_diagnostic("[DIAGNOSTICS] Stability check passed ('all slots are idle' detected). Unloading.")
             self.wizard_awaiting_idle_signal = False
-            self._ask_for_stability_confirmation()
+            self.wizard_idle_signal_received = True
+            self.unload_model()
         is_loading = "Loading..." in self.left_panel.status_label.text()
         if is_loading and "model loaded" in text_to_append.lower():
             self.left_panel.set_status(ServerStatus.LOADED)
             log_msg = "\n[INFO] Model is fully loaded."
             self.left_panel.append_output(log_msg)
-            print(f"[DIAGNOSTICS] Detected 'model loaded' string.")
+            self.log_diagnostic(f"[DIAGNOSTICS] Detected 'model loaded' string.")
             if self.wizard_is_benchmarking and self.wizard_current_is_viability_check == "ngl_testing":
                 self._run_inference_stability_test()
             elif self.wizard_is_benchmarking and self.wizard_current_is_viability_check == "resource_probe":
@@ -766,10 +877,10 @@ class MainWindow(QWidget):
                     self.wizard_resource_probe_result = {'success': True, 'vram': vram, 'ram_free_gb': ram_free}
                 except Exception as e:
                     self.wizard_resource_probe_result = {'success': False, 'error': str(e)}
-                print(f"[DIAGNOSTICS] Resource probe measurement taken. Unloading...")
+                self.log_diagnostic(f"[DIAGNOSTICS] Resource probe measurement taken. Unloading...")
                 self.unload_model()
             elif self.wizard_is_benchmarking and self.wizard_current_is_viability_check != "kv_probe":
-                print("[DIAGNOSTICS] Calling _continue_wizard_benchmark().")
+                self.log_diagnostic("[DIAGNOSTICS] Calling _continue_wizard_benchmark().")
                 self._continue_wizard_benchmark()
             elif self.left_panel.open_on_load_checkbox.isChecked():
                 try:
@@ -780,33 +891,10 @@ class MainWindow(QWidget):
                 except Exception as e:
                     self.left_panel.append_output(f"\n--- Could not open web browser: {e} ---")
 
-    def _ask_for_stability_confirmation(self):
-        self.wizard_timer.stop()
-        user_confirmed = False
-        if self.wizard_confirm_each_step:
-            reply = QMessageBox.question(self, 'Stability Test Passed',
-                                         "The current configuration appears stable.\n\n"
-                                         "Do you want to accept this result and continue tuning?",
-                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                         QMessageBox.StandardButton.Yes)
-            if reply == QMessageBox.StandardButton.Yes: user_confirmed = True
-        else:
-            print("[DIAGNOSTICS] Auto-confirming stability test.")
-            user_confirmed = True
-        if user_confirmed:
-            print("[DIAGNOSTICS] User confirmed stability test. Proceeding to unload.")
-            self.wizard_idle_signal_received = True
-            self.unload_model()
-        else:
-            print("[DIAGNOSTICS] User rejected stability test. Aborting wizard.")
-            self.left_panel.append_output("[WIZARD] Tuning aborted by user.")
-            self.unload_model();
-            self._finish_tuning_wizard()
-
     def _run_inference_stability_test(self):
         if self.wizard_awaiting_idle_signal: return
         self.left_panel.append_output("[WIZARD] Model loaded. Performing inference stability test...")
-        print("[DIAGNOSTICS] Starting StabilityRequestWorker thread.")
+        self.log_diagnostic("[DIAGNOSTICS] Starting StabilityRequestWorker thread.")
         self.wizard_awaiting_idle_signal = True
         self.stability_thread = QThread()
         self.stability_worker = StabilityRequestWorker(self.wizard)
@@ -819,7 +907,7 @@ class MainWindow(QWidget):
 
     def unload_model(self):
         if self.process and self.process.state() == QProcess.ProcessState.Running:
-            print("[DIAGNOSTICS] Unloading model via taskkill.")
+            self.log_diagnostic("[DIAGNOSTICS] Unloading model via taskkill.")
             subprocess.run(f'taskkill /F /T /PID {self.process.processId()}', shell=True, capture_output=True,
                            creationflags=subprocess.CREATE_NO_WINDOW)
 
@@ -870,42 +958,9 @@ class MainWindow(QWidget):
         self.left_panel.append_output(summary)
         QApplication.processEvents()
 
-        if self.analysis_results.get('model_architecture') == 'Dense':
-            current_params_dict = {p.key: p.value for p in self.right_panel.get_parameters()}
-            if '-md' not in current_params_dict and '--model-draft' not in current_params_dict:
-                if QMessageBox.question(self, "Speculative Decoding", "Do you have a compatible draft model?",
-                                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                        QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
-                    draft_file, _ = QFileDialog.getOpenFileName(self, "Select Draft Model File", "",
-                                                                "GGUF Files (*.gguf)")
-                    if draft_file: self._update_editor_params({'-md': draft_file})
+        
 
-        # Check for Vision/MMProj
-        model_path_lower = model_path.lower()
-        # Check for 'vl' or 'vision' in the filename specifically to avoid path false positives
-        filename_lower = os.path.basename(model_path_lower)
-
-        # Refresh params in case draft model added something (though unlikely to overlap)
-        current_params_dict = {p.key: p.value for p in self.right_panel.get_parameters()}
-
-        if ('vl' in filename_lower or 'vision' in filename_lower) and \
-                '--mmproj' not in current_params_dict and \
-                '--mmproj-url' not in current_params_dict:
-
-            reply = QMessageBox.question(
-                self,
-                "Vision Model Detected",
-                "This appears to be a Vision Language Model. To use image inputs, a Multimodal Projector (--mmproj) is usually required.\n\nDo you want to select one now?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No
-            )
-
-            if reply == QMessageBox.StandardButton.Yes:
-                mmproj_file, _ = QFileDialog.getOpenFileName(
-                    self, "Select Multimodal Projector File", "", "GGUF Files (*.gguf);;All Files (*.*)"
-                )
-                if mmproj_file:
-                    self._update_editor_params({'--mmproj': mmproj_file})
+        
 
         final_params_list = self.right_panel.get_parameters()
         final_params_dict = {p.key: p.value for p in final_params_list}
@@ -922,7 +977,7 @@ class MainWindow(QWidget):
     def _continue_wizard_benchmark(self):
         self.wizard_timer.stop()
         self.left_panel.append_output("[WIZARD] Triggering 3 API requests for benchmarking...")
-        print("[DIAGNOSTICS] Starting ApiRequestWorker thread.")
+        self.log_diagnostic("[DIAGNOSTICS] Starting ApiRequestWorker thread.")
         self.wizard_tps_results.clear()
         self.thread = QThread()
         self.worker = ApiRequestWorker(self.wizard)
@@ -967,7 +1022,7 @@ class MainWindow(QWidget):
         unload_timer.start(250)
 
     def _finish_tuning_wizard(self):
-        print("[DIAGNOSTICS] Wizard generator finished. Cleaning up.")
+        self.log_diagnostic("[DIAGNOSTICS] Wizard generator finished. Cleaning up.")
         self.wizard_timer.stop()
         self.wizard_generator = None
         self.wizard_is_benchmarking = False
