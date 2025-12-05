@@ -67,7 +67,7 @@ class TuningWizard:
                 return {'success': True, 'params': current_params, 'reason': 'success', 'error_details': None}
 
             # 2. Analyze Failure
-            error_details = result.get('error_details', {})
+            error_details = result.get('error_details') or {}
 
             if error_details.get('type') == 'resource_guard':
                 return {'success': False, 'params': current_params, 'reason': 'resource_guard',
@@ -212,9 +212,26 @@ class TuningWizard:
 
         # Defensive assignment
         try:
+            
+            # --- NEW: Re-check for Draft Model (in case user added it via prompt) ---
+            if '-md' in self.initial_params or '--model-draft' in self.initial_params:
+                # Check if draft opts are already in the list to avoid duplicates
+                if not any(opt['id'] == 'draft_offload' for opt in proposed_optimizations):
+                    yield {'action': 'log', 'message': "> Draft model detected (via prompt). Adding speculative decoding optimizations."}
+                    proposed_optimizations.extend([
+                        {'id': 'draft_offload', 'label': 'Fully Offload Draft Model (-ngld 99)', 'checked': True, 'params': {'-ngld': '99'}},
+                        {'id': 'draft_kv_cache', 'label': 'Enable 8-bit KV Cache for Draft Model', 'checked': True, 'params': {'--cache-type-k-draft': 'q8_0', '--cache-type-v-draft': 'q8_0'}}
+                    ])
             self.analysis['model_layers'] = metadata_result.get('layers', 0)
             self.analysis['model_max_context'] = metadata_result.get('max_context', 32768)
             self.analysis['proposed_optimizations'] = proposed_optimizations
+
+            # --- NEW: Truth-based Architecture Override ---
+            if metadata_result.get('is_moe'):
+                self.analysis['model_architecture'] = 'Mixture of Experts (MoE)'
+                yield {'action': 'log', 'message': "> Log analysis confirmed Mixture of Experts (MoE) architecture."}
+            elif metadata_result.get('is_qwen3vl'):
+                 yield {'action': 'log', 'message': "> Log analysis confirmed Qwen3-VL architecture."}
 
             # Reorder GPU list (with error handling)
             ground_truth_gpus = metadata_result.get('gpus', [])
@@ -524,6 +541,28 @@ class TuningWizard:
 
         if result['success']:
             return result['params']
+
+        
+        # --- Fallback: Distributed Split ---
+        yield {'action': 'log', 'message': "> Primary-First split failed. Attempting Distributed Split..."}
+        gpus = self.analysis.get('gpus', [])
+        total_vram = sum(g.get('vram', {}).get('free_gb', 0) for g in gpus)
+
+        if total_vram > 0:
+            # Sort by ID to ensure comma-separated string matches device ID order
+            sorted_gpus = sorted(gpus, key=lambda g: g['id'])
+            dist_props = [g.get('vram', {}).get('free_gb', 0) / total_vram for g in sorted_gpus]
+            dist_ts_string = ",".join([f"{p:.3f}" for p in dist_props])
+
+            yield {'action': 'log', 'message': f'> Using "Distributed" tensor split: {dist_ts_string}'}
+            params['-ts'] = dist_ts_string
+
+            # Retry with distributed split
+            result_dist = yield from self._run_test_with_ts_balancing(params, timeout)
+
+            if result_dist['success']:
+                return result_dist['params']
+        # -----------------------------------
 
         yield {'action': 'log', 'message': "> Full VRAM offload failed. Automatically transitioning to CPU offload."}
         return (yield from self._tune_multi_cpu())
