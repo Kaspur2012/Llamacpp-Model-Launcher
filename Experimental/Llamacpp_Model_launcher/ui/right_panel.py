@@ -2,7 +2,7 @@
 
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
                              QScrollArea, QFormLayout, QFrame, QPushButton, QCheckBox,
-                             QMessageBox)
+                             QMessageBox, QFileDialog)
 from PyQt6.QtCore import Qt, pyqtSignal
 from Llamacpp_Model_launcher.core.command_builder import Parameter
 
@@ -91,7 +91,6 @@ class RightPanel(QWidget):
         button_layout.addWidget(save_button)
         layout.addLayout(button_layout)
 
-    # --- MODIFIED: Use blockSignals to prevent dirtying during initial load ---
     def populate(self, command_parts: list[Parameter], model_name: str):
         """Clears and fills the editor with a new set of parameters."""
         # Block signals on the container widget to prevent textChanged from firing
@@ -113,7 +112,13 @@ class RightPanel(QWidget):
 
         self.clear_dirty_state()
 
-    # --- MODIFIED: Simplified to always connect signals ---
+    def _browse_file(self, line_edit):
+        """Helper to open file dialog and set line edit text."""
+        file_filter = "GGUF Files (*.gguf);;All Files (*)"
+        path, _ = QFileDialog.getOpenFileName(self, "Select File", "", file_filter)
+        if path:
+            line_edit.setText(path)
+
     def add_parameter_row(self, param_key, param_value):
         """Adds a single row to the parameter editor form and connects its signals."""
         field_container = QWidget()
@@ -125,6 +130,8 @@ class RightPanel(QWidget):
             input_widget = QLineEdit(param_value)
             browse_button = QPushButton("Browse...")
             browse_button.setProperty("param_type", param_key)
+            # Connect the browse button to the helper method
+            browse_button.clicked.connect(lambda _, le=input_widget: self._browse_file(le))
             field_layout.addWidget(input_widget)
             field_layout.addWidget(browse_button)
         elif param_value is None:
@@ -135,7 +142,7 @@ class RightPanel(QWidget):
             input_widget = QLineEdit(param_value)
             field_layout.addWidget(input_widget)
 
-        # --- FIX: Signals are now connected unconditionally ---
+        # Signals are now connected unconditionally
         if isinstance(input_widget, QLineEdit):
             input_widget.textChanged.connect(self._mark_as_dirty)
         elif isinstance(input_widget, QCheckBox):
@@ -161,7 +168,6 @@ class RightPanel(QWidget):
                 self._mark_as_dirty()
                 break
 
-    # --- MODIFIED: Call the simplified add_parameter_row ---
     def _add_new_parameter_from_input(self):
         param_name = self.new_param_name_input.text().strip()
         param_value = self.new_param_value_input.text().strip()
