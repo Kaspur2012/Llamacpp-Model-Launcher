@@ -252,6 +252,10 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 ##   Change Log
 
+*   12/05/2025 - 
+    *   Moved diagnostic log to the main tuning window
+	*	fixed browse button
+	*	qwen3 vision dense model can only have draft or vision, not both, popup added for user to choose if they added both.
 *   12/03/2025 - 
     *   Added new option to Tuning Assistant window:
 		*	Ensure Safe System Overhead:
