@@ -225,8 +225,16 @@ class LeftPanel(QWidget):
         self.model_dropdown.blockSignals(False)
 
     def append_output(self, text):
+        scrollbar = self.output_viewer.verticalScrollBar()
+        was_at_bottom = scrollbar.value() >= (scrollbar.maximum() - 20)
+        old_value = scrollbar.value()
+
         self.output_viewer.append(text)
-        self.output_viewer.verticalScrollBar().setValue(self.output_viewer.verticalScrollBar().maximum())
+
+        if was_at_bottom:
+            scrollbar.setValue(scrollbar.maximum())
+        else:
+            scrollbar.setValue(old_value)
 
     def clear_output(self):
         self.output_viewer.clear()
