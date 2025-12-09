@@ -822,30 +822,39 @@ class MainWindow(QWidget):
         self.update_button_states()
 
     def flush_output_buffer(self):
-        if not self.output_buffer: self.output_update_timer.stop(); return
-        text_to_append = self.output_buffer;
+        if not self.output_buffer:
+            self.output_update_timer.stop()
+            return
+
+        text_to_append = self.output_buffer
         self.output_buffer = ""
+
         # Only show raw output if we are NOT running the wizard
         if self.wizard_generator is None and not self.wizard_is_benchmarking:
             self.left_panel.append_output(text_to_append)
+
         if self.wizard_is_benchmarking and self.wizard_current_is_viability_check == "ngl_testing":
             if self.soft_failure_regex.search(text_to_append):
                 self.log_diagnostic("[DIAGNOSTICS] Soft failure artifact detected. Flagging for failure.")
                 self.left_panel.append_output("[WIZARD] **Detected unstable server signature (soft failure).**")
                 self.wizard_saw_soft_failure_artifact = True
-        if self.wizard_is_benchmarking and not self.wizard_current_is_viability_check and len(
-                self.wizard_tps_results) < 3:
+
+        if self.wizard_is_benchmarking and not self.wizard_current_is_viability_check and len(self.wizard_tps_results) < 3:
             matches = self.tps_regex.findall(text_to_append)
             for match in matches:
                 try:
                     tps_value = float(match)
-                    if tps_value > 5000: self.log_diagnostic(f"[DIAGNOSTICS] Discarding unrealistic TPS value: {tps_value}"); continue
+                    if tps_value > 5000:
+                        self.log_diagnostic(f"[DIAGNOSTICS] Discarding unrealistic TPS value: {tps_value}")
+                        continue
                     self.wizard_tps_results.append(tps_value)
                     log_msg = f"[WIZARD] Found TPS value: {tps_value:.2f}. ({len(self.wizard_tps_results)}/3)"
                     self.left_panel.append_output(log_msg)
                     self.log_diagnostic(f"[DIAGNOSTICS] Regex matched: {tps_value:.2f} t/s.")
+
                     if len(self.wizard_tps_results) >= 3:
-                        if self.benchmark_timeout_timer and self.benchmark_timeout_timer.isActive(): self.benchmark_timeout_timer.stop()
+                        if self.benchmark_timeout_timer and self.benchmark_timeout_timer.isActive():
+                            self.benchmark_timeout_timer.stop()
                         self.left_panel.append_output("[WIZARD] Collected 3 TPS values. Finalizing benchmark.")
                         self.log_diagnostic("[DIAGNOSTICS] Collected 3/3 TPS values. Calculating average.")
                         avg_tps = sum(self.wizard_tps_results) / len(self.wizard_tps_results)
@@ -856,17 +865,41 @@ class MainWindow(QWidget):
                         break
                 except (ValueError, IndexError):
                     pass
+
         if self.wizard_awaiting_idle_signal and self.idle_regex.search(text_to_append):
             self.log_diagnostic("[DIAGNOSTICS] Stability check passed ('all slots are idle' detected). Unloading.")
             self.wizard_awaiting_idle_signal = False
             self.wizard_idle_signal_received = True
             self.unload_model()
+
         is_loading = "Loading..." in self.left_panel.status_label.text()
         if is_loading and "model loaded" in text_to_append.lower():
             self.left_panel.set_status(ServerStatus.LOADED)
             log_msg = "\n[INFO] Model is fully loaded."
             self.left_panel.append_output(log_msg)
             self.log_diagnostic(f"[DIAGNOSTICS] Detected 'model loaded' string.")
+
+            # --- LIVE RESOURCE GUARD (Post-Load) ---
+            if self.wizard_is_benchmarking:
+                try:
+                    analyzer = SystemAnalyzer()
+                    live_ram_gb = analyzer.get_live_ram_usage()
+                    # 1.0 GB Safety Floor. We check > 0.0 to skip if psutil is missing (returns 0.0)
+                    if 0.0 < live_ram_gb < 1.0:
+                         self.left_panel.append_output(f"\n[RESOURCE GUARD] Post-load check failed: Only {live_ram_gb:.2f} GB RAM free (Limit: 1.0 GB). Aborting.")
+                         self.log_diagnostic(f"[DIAGNOSTICS] Post-load Resource Guard triggered. RAM: {live_ram_gb:.2f} GB")
+                         self.wizard_error_details = {
+                            'type': 'resource_guard',
+                            'resource': 'ram',
+                            'detected_mib': (live_ram_gb * 1024),
+                            'limit_mib': 1024
+                         }
+                         self.unload_model()
+                         return
+                except Exception as e:
+                    self.log_diagnostic(f"[DIAGNOSTICS] Resource check failed: {e}")
+            # ---------------------------------------
+
             if self.wizard_is_benchmarking and self.wizard_current_is_viability_check == "ngl_testing":
                 self._run_inference_stability_test()
             elif self.wizard_is_benchmarking and self.wizard_current_is_viability_check == "resource_probe":
@@ -886,7 +919,7 @@ class MainWindow(QWidget):
                 try:
                     host, port = self.get_server_address_from_command()
                     url_to_open = f'http://{host}:{port}/'
-                    webbrowser.open(url_to_open);
+                    webbrowser.open(url_to_open)
                     self.left_panel.open_on_load_checkbox.setChecked(False)
                 except Exception as e:
                     self.left_panel.append_output(f"\n--- Could not open web browser: {e} ---")
