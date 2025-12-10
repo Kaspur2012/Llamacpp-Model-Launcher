@@ -960,11 +960,17 @@ class TuningWizard:
 
             # Logic if Helper fails even after TS balancing
             if result['reason'] == 'resource_guard':
+                # Check for Total System Saturation (Already at floor)
+                current_c = int(ctx_param.get('-c', 4096))
+                if current_c <= 512:
+                    yield {'action': 'log', 'message': "  > CRITICAL: Model does not fit in RAM+VRAM even at min context. Aborting."}
+                    break
+
                 # RAM Limit -> Reduce Context, Retry same ncmoe
-                new_ctx = max(512, int(ctx_param.get('-c', 4096)) - 2048)
+                new_ctx = max(512, current_c - 2048)
                 ctx_param['-c'] = str(new_ctx)
                 yield {'action': 'log', 'message': f"  > RAM Saturated. Reducing context to {new_ctx}."}
-                if current_ncmoe > 0: current_ncmoe -= 1  # Retreat to GPU to re-evaluate
+                # if current_ncmoe > 0: current_ncmoe -= 1  <-- REMOVED to prevent infinite VRAM<->RAM loop
                 continue
 
             # If we OOMed on GPU (saturation/limit), increment ncmoe (move to CPU)
