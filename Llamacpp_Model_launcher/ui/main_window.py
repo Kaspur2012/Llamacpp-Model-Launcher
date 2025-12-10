@@ -227,7 +227,12 @@ class MainWindow(QWidget):
 
                 # 3. Resource Guard: Active Protection
                 # If CPU usage is dangerously close to Free RAM, abort to prevent freezing
-                if self.detected_cpu_usage_mib > 0:
+                # MODIFIED: Check user preference 'ensure_safe_overhead'
+                should_check_resources = True
+                if self.wizard and hasattr(self.wizard, 'ensure_safe_overhead'):
+                    should_check_resources = self.wizard.ensure_safe_overhead
+
+                if should_check_resources and self.detected_cpu_usage_mib > 0:
                     free_ram_mib = self.analysis_results.get('ram', {}).get('free_gb', 0) * 1024
                     # 128 MB Safety Buffer for OS response
                     if self.detected_cpu_usage_mib > (free_ram_mib - 16):
@@ -880,7 +885,8 @@ class MainWindow(QWidget):
             self.log_diagnostic(f"[DIAGNOSTICS] Detected 'model loaded' string.")
 
             # --- LIVE RESOURCE GUARD (Post-Load) ---
-            if self.wizard_is_benchmarking:
+            # Active ONLY if user checked "Ensure Safe Resource Overhead" (or default True)
+            if self.wizard_is_benchmarking and getattr(self.wizard, 'ensure_safe_overhead', True):
                 try:
                     analyzer = SystemAnalyzer()
                     live_ram_gb = analyzer.get_live_ram_usage()
