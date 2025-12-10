@@ -319,10 +319,16 @@ All hardware analysis, VRAM measurement, and offloading logic are built around *
 #### **5. Limited Testing on Very Large Models (>70B)**
 
 The development and testing system is equipped with **32 GB of DDR4 RAM**. This is sufficient for tuning models up to the 70B class, which often require partial CPU offloading. However, extremely large models (>100B) that would be almost entirely reliant on system RAM have not been thoroughly validated. The wizard's dynamic timeouts and memory calculations may not be perfectly calibrated for the performance characteristics of these huge models.
+Some large models technically will able to run if manually configured which the wizard will fail on auto tune due to the back of system resources.
+Currently the wizard does not take into consideration of hard disk paging as an option to load model so if the wizard find itself running out of RAM, it will abort the tuning.
+Current safety guard is 1GB RAM and 0.6 VRAM. Abort/Stop if < 1GB RAM, shave context if < 0.6GB VRAM
 
 #### **6. Agressive context tuning **
 
 Currently the context tuning is super aggressive, it will squeeze all your vram for the most context. The app is sending a ~2k token for stability test so if you and sending very large context to the llm, you WILL see it running out of memory. In this case you need to either manually lower the context to compensate for this or use your own stability long prompt(located in the parameters_db.py -> BENCHMARK_PROMPT, just use your super lomg prompt here so the model can adjust tuning context properly to your long prompt).
+Updated- Added overhead feature in tunung assistant ui
+
+
 
 </details>
 
