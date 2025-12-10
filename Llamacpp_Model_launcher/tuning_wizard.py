@@ -23,6 +23,7 @@ class TuningWizard:
     def __init__(self, analysis_results, initial_params):
         self.analysis = analysis_results
         self.initial_params = initial_params
+        self.ensure_safe_overhead = True  # Default to True until user chooses
         self.best_config = {'params': {}, 'tps': 0.0}
         self.primary_gpu_id = 0  # Will be updated by user choice
         self.base_params = {}  # Will be built dynamically
@@ -259,6 +260,9 @@ class TuningWizard:
 
         # --- SHOW UI ---
         user_choices = yield {'action': 'show_summary_view', 'data': self.analysis}
+
+        # Update Safety Preference based on UI checkbox
+        self.ensure_safe_overhead = user_choices.get('ensure_safe_overhead', True)
 
         self.base_params = user_choices.get('selected_optimizations', {})
         yield {'action': 'log',
