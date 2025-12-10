@@ -7,77 +7,103 @@ HELP_DOCUMENTATION = """
 
 ### 1. Introduction
 
-Welcome to the Llama.cpp Model Launcher! This application provides a clean, powerful, and user-friendly graphical interface (GUI) for the `llama-server.exe` tool from the Llama.cpp project.
+Welcome to the Llama.cpp Model Launcher! This application is a powerful graphical interface for `llama-server.exe`. It transforms the complex command-line experience into a modern desktop workflow.
 
-Its purpose is to replace the tedious and error-prone process of typing long commands into a terminal. With this launcher, you can manage, edit, delete, duplicate and run all your language models with the point-and-click simplicity of a modern desktop application.
+Beyond just launching models, this version features an intelligent **Tuning Wizard** that benchmarks your specific hardware (CPU, RAM, GPUs) against your model to automatically calculate the optimal configuration for maximum speed and context size.
 
 ### 2. First-Time Setup
 
-Before you can launch a model, you need to tell the application where to find two key items. This is a one-time setup, and your choices will be saved for future sessions.
-
 1.  **Set the Llama.cpp Directory**:
-    *   Click the **Browse...** button next to the "Llama.cpp Directory" label.
-    *   Navigate to and select the folder that contains your `llama-server.exe` file.
-    *   The application will verify that `llama-server.exe` exists in the selected folder.
-
+    *   Click **Browse...** next to "Llama.cpp Directory".
+    *   Select the folder containing your `llama-server.exe`.
 2.  **Set the Models File**:
-    *   Click the **Browse...** button next to the "Models File" label.
-    *   Select the `.txt` file that contains your model launch commands.
-    *   **File Format**: This text file must be structured with a model name on one line, followed immediately by its full launch command on the next line. For example:
-        ```        Llama-3-8B-Instruct-Q6_K
-        llama-server.exe -m D:\\models\\Llama-3-8B-Instruct-Q6_K.gguf -c 4096 -ngl 99 -fa on
-
-        Mistral-7B-Instruct-v0.2-Q5_K_M
-        llama-server.exe -m D:\\models\\mistral-7b-instruct-v0.2.Q5_K_M.gguf -c 4096 -ngl 99
-        ```
-
-Once both paths are set, the **Model Selection** dropdown menu will automatically populate with the names from your text file.
+    *   Click **Browse...** next to "Models File".
+    *   Select your `.txt` file containing model commands.
+    *   *Format*: Model Name on line 1, Command on line 2.
+    *   This can be an empty text file or provided example model file.
 
 ### 3. The Main Interface
 
-The application is divided into two main panels.
-
-#### Left Panel: Main Control & Display
-This is where you select and control the model server.
-
-*   **Model Selection Dropdown**: Choose the model configuration you wish to load.
+#### Left Panel: Controls & Logs
+*   **Model Selection**: Pick a model config to load.
 *   **Web UI Options**:
-    *   `Enable Web UI`: Keep this checked to run the standard web server. Unchecking it adds the `--no-webui` flag to the command.
-    *   `Auto-Open Web UI`: If checked, your web browser will automatically open to the server's page (`http://localhost:8080`) a single time after the model successfully loads.
-*   **Process Control Buttons**:
-    *   **Load Model**: Builds the final command from the editor and starts the `llama-server.exe` process.
-    *   **Unload Model**: Forcefully stops the server process.
-    *   **Exit**: Stops any running server and closes the application.
-*   **Status Indicator**: A colored dot gives you an at-a-glance view of the server's state:
-    *   **Red (Unloaded)**: The server is not running.
-    *   **Yellow (Loading...)**: The server is loading the model into memory.
-    *   **Green (Loaded)**: The model is successfully loaded and ready.
-    *   **Red (Error)**: The server process terminated unexpectedly.
-*   **Output / Commands / Help View**:
-    *   The main text area shows the **live output** from the server by default.
-    *   Click the **Commands** button to switch to the **Parameter Browser**. This interactive UI allows you to search for and discover all available Llama.cpp parameters. Each parameter has a description and an "Add" button to add it directly to your model's configuration.
-    *   Click the **Help** button to view this user guide at any time.
-    *   Click **Show Output** to return to the live log from either the Commands or Help view.
+    *   `Enable Web UI`: Runs the standard visual interface.
+    *   `Auto-Open Web UI`: Opens your default browser to `localhost:xxxx` upon success.
+*   **Action Buttons**:
+    *   **Load Model**: Starts the server using current settings.
+    *   **Unload Model**: Kills the running server process.
+    *   **Tune Model**: Opens the **Tuning Wizard** (see Section 4).
+    *   **System**: Displays a static summary of detected hardware and model metadata.
+    *   **Commands**: Opens the **Interactive Parameter Browser** to search/add flags.
+*   **Output View**:
+    *   Displays live server logs.
+    *   **Smart Autoscroll**: The view scrolls down automatically. To read history, simply scroll up; autoscroll will pause until you return to the bottom.
 
 #### Right Panel: Configuration Editor
-This is where you can view and modify all aspects of the selected model's configuration.
+*   **Model Name**: Rename your configuration here.
+*   **Parameter List**:
+    *   **Text Fields**: For values (e.g., `-c 8192`).
+    *   **Checkboxes**: For flags (e.g., `--no-mmap`).
+    *   **Browse Buttons**: Parameters like `-m` (Model Path) or `--mmproj` (Vision Adapter) have a browse button to select files easily.
+*   **Management**: Duplicate, Delete, or Save configurations to your file.
 
-*   **Model Name**: An editable field for the display name that appears in the dropdown.
-*   **Parameter Editor**: A dynamic list of all parameters for the selected command. Flags (like `--no-mmap`) are shown as **checkboxes**, and parameters with values (like `-c 4096`) are shown as **text fields**.
-*   **Add New Parameter**: Allows you to manually add any valid Llama.cpp parameter to the current configuration. For a guided experience, use the **Parameter Browser** on the left.
-*   **Action Buttons**:
-    *   **Add**: Prepares the editor for a new model configuration using a default template.
-    *   **Duplicate**: Creates a copy of the currently selected configuration for easy modification.
-    *   **Delete**: Deletes the currently selected model from your `.txt` file.
-    *   **Reset**: Discards any unsaved changes in the editor.
-    *   **Save to File**: Permanently saves all changes (name and parameters) to your `.txt` file.
+---
 
-### 4. Common Issue
+### 4. The Tuning Wizard 🪄
 
-**When I click "Load Model," nothing happens.**
-This almost always means the Llama.cpp Directory path is incorrect, often after updating Llama.cpp to a new version. Simply click the **Browse...** button and point the application to the new folder containing your updated `llama-server.exe`.
+The Tuning Wizard is an automated system that finds the "Perfect Fit" for your model on your specific hardware.
 
-### 5. Some stuff about -ot command
+**How to use:**
+1.  Select a model from the dropdown.
+2.  Click **Tune Model**.
+3.  The wizard will scan your hardware and the model file.
+4.  A **Tuning Assistant** window will appear.
+
+**Tuning Assistant Options:**
+*   **Offload Strategy**:
+    *   **Single GPU**: Forces the model onto your main GPU. Best for speed if it fits.
+    *   **Multi-GPU (VRAM)**: Splits the model across all GPUs.
+    *   **Multi-GPU + CPU**: Uses all VRAM, then spills the rest to System RAM.
+*   **Maximize Context**: If checked, the wizard will try to increase the Context Size (`-c`) as high as possible without crashing.
+*   **Ensure Safe Overhead**: If checked, the wizard reserves ~600MB VRAM and ~1GB RAM for the OS to prevent system freezing. **Uncheck this at your own risk.**
+*   **Target Limit**: You can set a specific context limit (e.g., 16384), or leave it on "Auto" to go as high as hardware permits.
+
+**What the Wizard Does:**
+1.  **Phase 1**: Detects architecture (Dense vs MoE, Vision models) and layer counts.
+2.  **Phase 2**: Probes the "KV Cache" cost per token.
+3.  **Phase 3**: Finds the optimal Layer Offload (`-ngl`) and Tensor Split (`-ts`) to balance VRAM usage.
+4.  **Phase 4**: Iteratively increases context size until memory is full.
+5.  **Benchmark**: Runs a final speed test to report Tokens Per Second (TPS).
+
+---
+
+### 5. Safety Features
+
+**Resource Guard**:
+The application monitors your system RAM and VRAM in real-time while loading models.
+*   **Trigger**: If System RAM drops below **1.0 GB** (or VRAM below critical levels).
+*   **Action**: The application immediately kills the `llama-server` process.
+*   **Why?**: This prevents your computer from freezing or crashing due to memory starvation (Swap Death).
+*   *Note: You can disable this by unchecking "Ensure Safe Resource Overhead" in the Tuning Wizard, but this is dangerous.*
+
+**MoE Infinite Loop Protection**:
+When tuning large models, the wizard detects if the model is too large for your total system memory and aborts, rather than retrying endlessly.
+
+---
+
+### 6. Advanced Tips
+
+*   **Tensor Split (-ts)**: For multi-GPU setups, the wizard automatically calculates the split ratio based on the VRAM capacity of each card.
+*   **Vision Models**: The app detects `Qwen2-VL` and similar architectures. If you tune a vision model, it will prompt you to add the `--mmproj` (projector file) if missing.
+*   **Speculative Decoding**: If you have a draft model selected (`-md`), the wizard optimizes settings for both the main and draft models simultaneously.
+
+### 7. Troubleshooting
+
+*   **"Load Model" does nothing**: Check your Llama.cpp Directory path.
+*   **Resource Guard keeps killing my model**: Your model is too big for your physical RAM+VRAM. Try a higher quantization (e.g., Q4 instead of Q8) or a smaller context size.
+*   **Tuning fails with "Soft Failure"**: The server launched but didn't output text. This often happens with incompatible CUDA versions or corrupted model files.
+
+### 8. Some stuff about -ot command
 ## Mastering `llamacpp`'s `-ot` Command for Optimized Performance
 
 For enthusiasts and practitioners leveraging the power of `llamacpp` for local large language model inference, optimizing performance, especially on systems with limited VRAM, is a paramount concern. Among the arsenal of command-line arguments available, the `-ot` (or `--override-tensor`) command stands out as a powerful tool for fine-grained control over model layer offloading. This comprehensive guide will demystify the `-ot` command, its parameters, and provide practical examples to help you unlock its full potential.
@@ -215,7 +241,6 @@ put ffn_gate.weight of first 80 layer onto gpu 0
 
 -ot blk.[0-9].ffn_down.weight=CUDA0
 """
-
 
 # This file contains the structured database of all Llama.cpp parameters.
 # The 'options' for select types with numeric values have been converted
