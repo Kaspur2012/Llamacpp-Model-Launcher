@@ -254,6 +254,7 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 *   12/10/2025 - 
     *   Safety Guard is only enable if Ensure Safe Overhead is checked in tuning assistant. Ensure Safe Overhead is checked by default, if unchecked on model that > RAM+VRAM, prepare for disk paging...
+	*	updated help documentation
 *   12/05/2025 - 
     *   Moved diagnostic log to the main tuning window
 	*	fixed browse button
