@@ -252,6 +252,8 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 ##   Change Log
 
+*   12/13/2025 - 
+    *   prediction on amount of layers to offload tp ram is a bit smarter as well as predicting ctx cost.
 *   12/10/2025 - 
     *   Safety Guard is only enable if Ensure Safe Overhead is checked in tuning assistant. Ensure Safe Overhead is checked by default, if unchecked on model that > RAM+VRAM, prepare for disk paging...
 	*	updated help documentation
