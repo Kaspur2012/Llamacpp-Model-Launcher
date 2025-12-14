@@ -466,7 +466,8 @@ class MainWindow(QWidget):
                             'resource_usage': {
                                 'cpu_mib': self.detected_cpu_usage_mib,
                                 'gpu_mib': self.detected_gpu_usage_mib
-                            }
+                            },
+                            'last_loaded_vram': self.wizard_last_loaded_vram
                         }
                         self._advance_wizard(result)
 
@@ -788,6 +789,7 @@ class MainWindow(QWidget):
         return host, port
 
     def load_model(self):
+        self.wizard_last_loaded_vram = None  # Reset VRAM snapshot
         self.left_panel.show_output_view()
         # Reset counters for resource guard
         self.detected_cpu_usage_mib = 0.0
@@ -873,6 +875,32 @@ class MainWindow(QWidget):
 
         if self.wizard_awaiting_idle_signal and self.idle_regex.search(text_to_append):
             self.log_diagnostic("[DIAGNOSTICS] Stability check passed ('all slots are idle' detected). Unloading.")
+
+            # --- VRAM TELEMETRY (Moved to Idle State) ---
+            if self.wizard_is_benchmarking:
+                try:
+                    analyzer = SystemAnalyzer()
+                    self.wizard_last_loaded_vram = analyzer.get_live_vram_usage()
+                    if self.wizard_last_loaded_vram and self.left_panel:
+                        # Log the raw data for transparency (Physical ID aware)
+                        p_id = getattr(self.wizard, 'primary_gpu_id', 0)
+
+                        # Resolve Logical -> Physical (Naive scan match)
+                        # We don't have the full GPU list handy here easily without querying wizard state deep,
+                        # but we can check if wizard has the mapping.
+                        lookup_id = p_id
+                        if hasattr(self.wizard, 'analysis') and 'gpus' in self.wizard.analysis:
+                             target_gpu = next((g for g in self.wizard.analysis['gpus'] if g['id'] == p_id), None)
+                             if target_gpu and 'nvml_id' in target_gpu: lookup_id = target_gpu['nvml_id']
+
+                        if lookup_id in self.wizard_last_loaded_vram:
+                            info = self.wizard_last_loaded_vram[lookup_id]
+                            free_mb = (info['total_gb'] - info['used_gb']) * 1024
+                            self.left_panel.append_output(f"[WIZARD] Captured Resting VRAM: {free_mb:.2f} MiB free on Physical GPU {lookup_id} (Logical {p_id})")
+                except Exception as e:
+                    self.log_diagnostic(f"[DIAGNOSTICS] VRAM Capture failed: {e}")
+            # --------------------------------------------
+
             self.wizard_awaiting_idle_signal = False
             self.wizard_idle_signal_received = True
             self.unload_model()
@@ -883,6 +911,8 @@ class MainWindow(QWidget):
             log_msg = "\n[INFO] Model is fully loaded."
             self.left_panel.append_output(log_msg)
             self.log_diagnostic(f"[DIAGNOSTICS] Detected 'model loaded' string.")
+
+
 
             # --- LIVE RESOURCE GUARD (Post-Load) ---
             # Active ONLY if user checked "Ensure Safe Resource Overhead" (or default True)
