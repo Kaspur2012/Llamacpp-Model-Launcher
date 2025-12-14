@@ -65,6 +65,9 @@ class TuningWizard:
             result = yield {'action': 'test_ngl_value', 'timeout_ms': timeout_ms}
 
             if result['success']:
+                # Capture VRAM telemetry for prediction logic
+                if 'last_loaded_vram' in result and result['last_loaded_vram']:
+                    self.last_successful_vram_info = result['last_loaded_vram']
                 return {'success': True, 'params': current_params, 'reason': 'success', 'error_details': None}
 
             # 2. Analyze Failure
@@ -600,8 +603,55 @@ class TuningWizard:
             temp_params = best_known_params.copy()
             temp_params['-c'] = str(next_ctx)
 
-            # --- Predictive Adjustment ---
+            # --- Predictive Adjustment & Self-Correction ---
+            layers_to_evict = 0 # Initialize for scope safety
             if strategy_allows_cpu:
+                # SELF-CORRECTION: Update Cost Estimate based on actual telemetry
+                if hasattr(self, 'last_successful_vram_info') and hasattr(self, 'prev_step_vram_info'):
+                     p_id = self.primary_gpu_id
+                     # Resolve Logical -> Physical
+                     lookup_id = p_id
+                     target_gpu = next((g for g in self.analysis.get('gpus', []) if g['id'] == p_id), None)
+                     if target_gpu and 'nvml_id' in target_gpu: lookup_id = target_gpu['nvml_id']
+
+                     if lookup_id in self.last_successful_vram_info and lookup_id in self.prev_step_vram_info:
+                         curr_info = self.last_successful_vram_info[lookup_id]
+                         prev_info = self.prev_step_vram_info[lookup_id]
+
+                         curr_free_mib = (curr_info['total_gb'] - curr_info['used_gb']) * 1024
+                         prev_free_mib = (prev_info['total_gb'] - prev_info['used_gb']) * 1024
+
+                         # Account for the layers we EVICTED in the previous step
+                         # Real Consumption = (VRAM Lost) + (VRAM Recovered via Eviction)
+                         prev_eviction = getattr(self, 'prev_layer_eviction', 0)
+                         avg_layer_mib = (self.analysis.get('model_size_gb', 0) * 1024) / max(1, self.analysis.get('model_layers', 1))
+
+                         recovered_mib = prev_eviction * avg_layer_mib
+                         vram_delta_mib = prev_free_mib - curr_free_mib
+
+                         # If we evicted layers, vram_delta might be negative (we gained free space).
+                         # But 'recovered_mib' adds back what we moved, revealing the true cost.
+                         real_consumption_mib = vram_delta_mib + recovered_mib
+
+                         token_delta = current_ctx - (current_ctx // 2)
+
+                         if real_consumption_mib > 0 and token_delta > 0:
+                             measured_cost = real_consumption_mib / token_delta
+                             current_cost = self.analysis.get('kv_mb_per_token', 0.0)
+
+                             # Log the math for transparency
+                             yield {'action': 'log', 'message': f"  > Math: VRAM Delta {vram_delta_mib:.1f} + Evicted {recovered_mib:.1f} = Real {real_consumption_mib:.1f} MB"}
+
+                             # Blend: 50% Old, 50% New (Faster adaptation)
+                             if measured_cost < current_cost:
+                                 new_cost = (current_cost * 0.5) + (measured_cost * 0.5)
+                                 self.analysis['kv_mb_per_token'] = new_cost
+                                 yield {'action': 'log', 'message': f"  > Self-Correction: Lowering Cost Est. to {new_cost:.4f} MB/token."}
+
+                # Update Previous State to Current State for the NEXT iteration comparison
+                if hasattr(self, 'last_successful_vram_info'):
+                    self.prev_step_vram_info = self.last_successful_vram_info
+
                 kv_mb = self.analysis.get('kv_mb_per_token', 0.0)
                 is_q8 = temp_params.get('-ctk') == 'q8_0'
                 effective_kv_cost = kv_mb * (0.55 if is_q8 else 1.0)
@@ -614,7 +664,40 @@ class TuningWizard:
                     avg_layer_mib = (model_size_gb * 1024) / total_layers if total_layers > 0 else 0
 
                     if avg_layer_mib > 0:
-                        layers_to_evict = math.ceil(added_vram_cost_mib / avg_layer_mib)
+                        layers_to_evict = 0
+                        prediction_made = False
+
+                        # --- SMART PREDICTION ---
+                        if hasattr(self, 'last_successful_vram_info') and self.last_successful_vram_info:
+                            # Resolve Logical ID -> Physical NVML ID
+                            p_id = self.primary_gpu_id
+                            lookup_id = p_id
+
+                            target_gpu = next((g for g in self.analysis.get('gpus', []) if g['id'] == p_id), None)
+                            if target_gpu and 'nvml_id' in target_gpu:
+                                lookup_id = target_gpu['nvml_id']
+
+                            if lookup_id in self.last_successful_vram_info:
+                                info = self.last_successful_vram_info[lookup_id]
+                                free_mib = (info['total_gb'] - info['used_gb']) * 1024
+
+                                # Safety Buffer 600MB
+                                usable_slack_mib = max(0, free_mib - 600)
+                                net_deficit_mib = added_vram_cost_mib - usable_slack_mib
+
+                                if net_deficit_mib > 0:
+                                    layers_to_evict = math.ceil(net_deficit_mib / avg_layer_mib)
+                                    yield {'action': 'log', 'message': f"  > Smart Prediction: Est.Cost: {added_vram_cost_mib:.1f} MB | Slack: {usable_slack_mib:.1f} MB | Deficit: {net_deficit_mib:.1f} MB -> Evict {layers_to_evict}."}
+                                else:
+                                    layers_to_evict = 0
+                                    yield {'action': 'log', 'message': f"  > Smart Prediction: Jump fits in VRAM slack ({usable_slack_mib:.2f} MiB free). No eviction needed."}
+
+                                prediction_made = True
+
+                        # --- FALLBACK PREDICTION (Pessimistic) ---
+                        if not prediction_made:
+                            layers_to_evict = math.ceil(added_vram_cost_mib / avg_layer_mib)
+
                         if layers_to_evict > 0:
                             if '-ncmoe' in temp_params:
                                 new_ncmoe = int(temp_params['-ncmoe']) + layers_to_evict
@@ -662,6 +745,9 @@ class TuningWizard:
             if level_success:
                 best_known_params = temp_params.copy()
                 current_ctx = next_ctx
+                # Store Eviction count for next step's calculation
+                self.prev_layer_eviction = layers_to_evict
+
                 yield {'action': 'log', 'message': "  > Success. Saving configuration."}
                 if current_ctx == target_limit: break
             else:
