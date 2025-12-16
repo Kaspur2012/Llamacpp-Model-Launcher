@@ -107,22 +107,6 @@ class TuningWizard:
                     is_ping_pong = True
 
                 if is_ping_pong:
-                    if last_ts_vals:
-                        yield {'action': 'log',
-                               'message': "  > Saturation (Ping-Pong). Attempting Midpoint Refinement..."}
-                        mid_ts = [(a + b) / 2.0 for a, b in zip(ts_vals, last_ts_vals)]
-                        mid_ts_str = ",".join([f"{x:.3f}" for x in mid_ts])
-                        current_params['-ts'] = mid_ts_str
-
-                        # One-shot midpoint test
-                        yield {'action': 'update_params', 'params': {**self.base_params, **current_params}}
-                        mid_result = yield {'action': 'test_ngl_value', 'timeout_ms': timeout_ms}
-
-                        if mid_result['success']:
-                            yield {'action': 'log', 'message': "  > Midpoint Refinement Successful!"}
-                            return {'success': True, 'params': current_params, 'reason': 'success',
-                                    'error_details': None}
-
                     return {'success': False, 'params': current_params, 'reason': 'saturation',
                             'error_details': error_details}
 
