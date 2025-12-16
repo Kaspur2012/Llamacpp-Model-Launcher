@@ -399,13 +399,67 @@ class TuningWizard:
 
                 elif strategy == 'multi_vram':
                     # Check ALL GPUs - find the worst deficit
+                    deficit_physical_id = -1
+
                     for gid, info in vram_info.items():
                         free_gb = info['total_gb'] - info['used_gb']
                         if free_gb < VRAM_FLOOR_GB:
                             local_deficit = (VRAM_FLOOR_GB - free_gb) * 1024
                             if local_deficit > deficit_mb:
                                 deficit_mb = local_deficit
-                                resource_name = f"GPU {gid} VRAM"
+                                resource_name = f"GPU {gid} (Physical) VRAM"
+                                deficit_physical_id = gid
+
+                    # Try Rebalancing if we have a deficit
+                    if deficit_mb > 0:
+                        yield {'action': 'log', 'message': f"> Safety Check: Found VRAM deficit of {deficit_mb:.1f} MB on GPU {deficit_physical_id}. Attempting Rebalance..."}
+                        model_size_mb = self.analysis.get('model_size_gb', 0) * 1024
+                        ts_str = final_params.get('-ts', '')
+
+                        def get_logical_id(phys_id):
+                            for g in self.analysis.get('gpus', []):
+                                if g.get('nvml_id') == phys_id: return g.get('id')
+                            return phys_id 
+
+                        deficit_logical_id = get_logical_id(deficit_physical_id)
+
+                        if model_size_mb > 0 and ts_str:
+                            try:
+                                splits = [float(x) for x in ts_str.split(',')]
+                                if deficit_logical_id < len(splits):
+                                    shift_mb = deficit_mb + 50.0 # Deficit + Buffer
+                                    shift_pct = shift_mb / model_size_mb
+
+                                    receiver_logical_id = -1
+
+                                    # Find Receiver with Surplus
+                                    for gid, info in vram_info.items():
+                                        if gid == deficit_physical_id: continue
+
+                                        free_gb = info['total_gb'] - info['used_gb']
+                                        surplus_mb = (free_gb - VRAM_FLOOR_GB) * 1024
+
+                                        if surplus_mb > (shift_mb + 50): 
+                                            log_id = get_logical_id(gid)
+                                            if log_id < len(splits):
+                                                receiver_logical_id = log_id
+                                                break
+
+                                    if receiver_logical_id != -1:
+                                        actual_shift = min(shift_pct, splits[deficit_logical_id])
+                                        splits[deficit_logical_id] -= actual_shift
+                                        splits[receiver_logical_id] += actual_shift
+
+                                        new_ts = ",".join([f"{x:.3f}" for x in splits])
+                                        final_params['-ts'] = new_ts
+
+                                        yield {'action': 'log', 'message': f"> Safety Balance: Shifting {actual_shift*100:.1f}% load from GPU {deficit_logical_id} to GPU {receiver_logical_id}."}
+                                        adjustment_made = True
+                                        deficit_mb = 0.0 # Clear deficit
+                                    else:
+                                        yield {'action': 'log', 'message': "> Rebalance failed: No other GPU has enough surplus VRAM."}
+                            except Exception as e:
+                                yield {'action': 'log', 'message': f"> Rebalance error: {e}"}
 
                 elif strategy == 'multi_cpu':
                     vram_danger = False
@@ -444,7 +498,9 @@ class TuningWizard:
                             deficit_mb = (RAM_FLOOR_GB - ram_free) * 1024
                             resource_name = "System RAM"
 
-                # --- APPLY PRECISION CUT (If needed) ---
+                
+
+# --- APPLY PRECISION CUT (If needed) ---
                 if deficit_mb > 0:
                     yield {'action': 'log', 'message': f"> Safety Alert: {resource_name} is below safe limits."}
                     yield {'action': 'log', 'message': f"> Needed: {deficit_mb:.2f} MB cleared."}
@@ -462,7 +518,7 @@ class TuningWizard:
                         yield {'action': 'log', 'message': "> KV Cost unknown. Applying fallback 15% cut."}
 
                     # Apply and Round
-                    new_c = current_c - tokens_to_drop
+                    new_c = max(512, current_c - tokens_to_drop) # Clamped to 512
                     new_c = (new_c // 256) * 256 # Align to 256
 
                     final_params['-c'] = str(new_c)
