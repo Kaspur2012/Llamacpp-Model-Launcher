@@ -897,8 +897,22 @@ class MainWindow(QWidget):
                             info = self.wizard_last_loaded_vram[lookup_id]
                             free_mb = (info['total_gb'] - info['used_gb']) * 1024
                             self.left_panel.append_output(f"[WIZARD] Captured Resting VRAM: {free_mb:.2f} MiB free on Physical GPU {lookup_id} (Logical {p_id})")
+
+                    # --- Capture Resource Probe Data (Active State) ---
+                    if self.wizard_current_is_viability_check == "resource_probe":
+                        ram_free = analyzer.get_live_ram_usage()
+                        self.wizard_resource_probe_result = {
+                            'success': True, 
+                            'vram': self.wizard_last_loaded_vram, 
+                            'ram_free_gb': ram_free
+                        }
+                        self.log_diagnostic("[DIAGNOSTICS] Resource Probe: Stats captured during idle state.")
+                    # --------------------------------------------------
+
                 except Exception as e:
                     self.log_diagnostic(f"[DIAGNOSTICS] VRAM Capture failed: {e}")
+                    if self.wizard_current_is_viability_check == "resource_probe":
+                        self.wizard_resource_probe_result = {'success': False, 'error': str(e)}
             # --------------------------------------------
 
             self.wizard_awaiting_idle_signal = False
@@ -939,15 +953,8 @@ class MainWindow(QWidget):
             if self.wizard_is_benchmarking and self.wizard_current_is_viability_check == "ngl_testing":
                 self._run_inference_stability_test()
             elif self.wizard_is_benchmarking and self.wizard_current_is_viability_check == "resource_probe":
-                try:
-                    analyzer = SystemAnalyzer()
-                    vram = analyzer.get_live_vram_usage()
-                    ram_free = analyzer.get_live_ram_usage()
-                    self.wizard_resource_probe_result = {'success': True, 'vram': vram, 'ram_free_gb': ram_free}
-                except Exception as e:
-                    self.wizard_resource_probe_result = {'success': False, 'error': str(e)}
-                self.log_diagnostic(f"[DIAGNOSTICS] Resource probe measurement taken. Unloading...")
-                self.unload_model()
+                self.log_diagnostic("[DIAGNOSTICS] Resource Probe: Model loaded. Starting inference to heat up memory...")
+                self._run_inference_stability_test()
             elif self.wizard_is_benchmarking and self.wizard_current_is_viability_check != "kv_probe":
                 self.log_diagnostic("[DIAGNOSTICS] Calling _continue_wizard_benchmark().")
                 self._continue_wizard_benchmark()
