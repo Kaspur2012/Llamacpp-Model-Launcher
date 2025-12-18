@@ -254,6 +254,7 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 *   12/18/2025 - 
     *   Attempts to remove unnecessary test runs.
+	*	Added stability test to pahe 4.6 for more acurate reading
 *   12/13/2025 - 
     *   prediction on amount of layers to offload tp ram is a bit smarter as well as predicting ctx cost.
 *   12/10/2025 - 
