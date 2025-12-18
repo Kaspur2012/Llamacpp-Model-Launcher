@@ -363,7 +363,9 @@ class TuningWizard:
             yield {'action': 'update_params', 'params': {**self.base_params, **final_params}}
 
             # 2. Measure Live Resources
-            live_stats = yield {'action': 'measure_live_resources', 'timeout_ms': 30000}
+            # Use dynamic timeout because we now run inference for the probe
+            probe_timeout = self._calculate_dynamic_timeout('ngl_test')
+            live_stats = yield {'action': 'measure_live_resources', 'timeout_ms': probe_timeout}
 
             if live_stats.get('success'):
                 # Define Safety Floors (User requirements)
