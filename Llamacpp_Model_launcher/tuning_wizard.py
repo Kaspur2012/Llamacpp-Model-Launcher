@@ -783,8 +783,42 @@ class TuningWizard:
                     break  # Cannot adjust
 
             if level_success:
+                # --- EARLY EXIT SAFETY CHECK ---
+                should_stop_early = False
+                if getattr(self, 'ensure_safe_overhead', True) and hasattr(self, 'last_successful_vram_info') and self.last_successful_vram_info:
+                    try:
+                        # Use 'strategy' directly (it is an argument to _tune_context_size_adaptive)
+                        if strategy == 'single_gpu':
+                            p_id = self.primary_gpu_id
+                            lookup_id = p_id
+                            target_gpu = next((g for g in self.analysis.get('gpus', []) if g['id'] == p_id), None)
+                            if target_gpu and 'nvml_id' in target_gpu: lookup_id = target_gpu['nvml_id']
+
+                            if lookup_id in self.last_successful_vram_info:
+                                info = self.last_successful_vram_info[lookup_id]
+                                free_mib = (info['total_gb'] - info['used_gb']) * 1024
+                                if free_mib < 600:
+                                    yield {'action': 'log', 'message': f"  > Safety Limit Hit: Only {free_mib:.1f} MB free. Stopping search."}
+                                    should_stop_early = True
+
+                        elif strategy == 'multi_vram':
+                            total_surplus_mib = 0
+                            for gid, info in self.last_successful_vram_info.items():
+                                free_mib = (info['total_gb'] - info['used_gb']) * 1024
+                                total_surplus_mib += max(0, free_mib - 600)
+
+                            if total_surplus_mib < 256:
+                                yield {'action': 'log', 'message': f"  > Safety Limit Hit: System-wide surplus is {total_surplus_mib:.1f} MB. Stopping search."}
+                                should_stop_early = True
+
+                    except Exception as e:
+                        yield {'action': 'log', 'message': f"  > Safety Check Warning: {e}"}
+
                 best_known_params = temp_params.copy()
                 current_ctx = next_ctx
+
+                if should_stop_early:
+                    break
                 # Store Eviction count for next step's calculation
                 self.prev_layer_eviction = layers_to_evict
 
@@ -811,6 +845,34 @@ class TuningWizard:
                         yield {'action': 'log', 'message': "  > Success. Searching higher..."}
                         best_known_params = result['params'].copy()
                         low_ctx = mid_ctx
+
+                        # --- EARLY EXIT SAFETY CHECK (Binary Search) ---
+                        if getattr(self, 'ensure_safe_overhead', True) and hasattr(self, 'last_successful_vram_info') and self.last_successful_vram_info:
+                            try:
+                                if strategy == 'single_gpu':
+                                    p_id = self.primary_gpu_id
+                                    lookup_id = p_id
+                                    target_gpu = next((g for g in self.analysis.get('gpus', []) if g['id'] == p_id), None)
+                                    if target_gpu and 'nvml_id' in target_gpu: lookup_id = target_gpu['nvml_id']
+
+                                    if lookup_id in self.last_successful_vram_info:
+                                        info = self.last_successful_vram_info[lookup_id]
+                                        free_mib = (info['total_gb'] - info['used_gb']) * 1024
+                                        if free_mib < 600:
+                                            yield {'action': 'log', 'message': f"  > Safety Limit Hit: Only {free_mib:.1f} MB free. Stopping search."}
+                                            break
+
+                                elif strategy == 'multi_vram':
+                                    total_surplus_mib = 0
+                                    for gid, info in self.last_successful_vram_info.items():
+                                        free_mib = (info['total_gb'] - info['used_gb']) * 1024
+                                        total_surplus_mib += max(0, free_mib - 600)
+
+                                    if total_surplus_mib < 256:
+                                        yield {'action': 'log', 'message': f"  > Safety Limit Hit: System-wide surplus is {total_surplus_mib:.1f} MB. Stopping search."}
+                                        break
+                            except Exception as e:
+                                yield {'action': 'log', 'message': f"  > Safety Check Warning: {e}"}
                     else:
                         yield {'action': 'log', 'message': "  > Failed. Searching lower..."}
                         high_ctx = mid_ctx
