@@ -150,6 +150,10 @@ class TuningWizard:
         yield {'action': 'log', 'message': "\n" + "=" * 25 + " Starting Tuning Wizard " + "=" * 25}
 
         proposed_optimizations = [
+            {'id': 'np_1', 'label': 'Set Parallel Sequences to 1 (-np 1)', 'checked': True,
+             'params': {'-np': '1'}},
+            {'id': 'fit_off', 'label': 'Disable Context Fitting (-fit off)', 'checked': True,
+             'params': {'-fit': 'off'}},
             {'id': 'flash_attn', 'label': 'Enable Flash Attention (--flash-attn)', 'checked': True,
              'params': {'--flash-attn': 'on'}},
             {'id': 'no_mmap', 'label': 'Disable Memory Mapping (--no-mmap)', 'checked': True,
@@ -180,7 +184,9 @@ class TuningWizard:
                 {'id': 'draft_offload', 'label': 'Fully Offload Draft Model (-ngld 99)', 'checked': True,
                  'params': {'-ngld': '99'}},
                 {'id': 'draft_kv_cache', 'label': 'Enable 8-bit KV Cache for Draft Model', 'checked': True,
-                 'params': {'--cache-type-k-draft': 'q8_0', '--cache-type-v-draft': 'q8_0'}}
+                 'params': {'--cache-type-k-draft': 'q8_0', '--cache-type-v-draft': 'q8_0'}},
+                {'id': 'ctx_draft_4096', 'label': 'Set Draft Context to 4096 (-cd 4096)', 'checked': True,
+                 'params': {'-cd': '4096'}}
             ])
 
         yield {'action': 'log', 'message': "\n[PHASE 1] Extracting Model Metadata..."}
@@ -208,7 +214,8 @@ class TuningWizard:
                     yield {'action': 'log', 'message': "> Draft model detected (via prompt). Adding speculative decoding optimizations."}
                     proposed_optimizations.extend([
                         {'id': 'draft_offload', 'label': 'Fully Offload Draft Model (-ngld 99)', 'checked': True, 'params': {'-ngld': '99'}},
-                        {'id': 'draft_kv_cache', 'label': 'Enable 8-bit KV Cache for Draft Model', 'checked': True, 'params': {'--cache-type-k-draft': 'q8_0', '--cache-type-v-draft': 'q8_0'}}
+                        {'id': 'draft_kv_cache', 'label': 'Enable 8-bit KV Cache for Draft Model', 'checked': True, 'params': {'--cache-type-k-draft': 'q8_0', '--cache-type-v-draft': 'q8_0'}},
+                        {'id': 'ctx_draft_4096', 'label': 'Set Draft Context to 4096 (-cd 4096)', 'checked': True, 'params': {'-cd': '4096'}}
                     ])
             self.analysis['model_layers'] = metadata_result.get('layers', 0)
             self.analysis['model_max_context'] = metadata_result.get('max_context', 32768)
