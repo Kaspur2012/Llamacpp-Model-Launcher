@@ -252,6 +252,11 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 ##   Change Log
 
+*   01/01/2026 - 
+    *  Due to recent changes to llamacpp, the following parameters are added as default: 
+		*  -np 1(this refer to concurrent parallelism, before it was default 1 now 4 which seem to require more vram/ram, turn this off if you require multiple concurrent chats)
+		*  -fit off(this is a new feature that auto configure llm, seem not quite as good as manual tuning atm)
+		*  -cd 4096(draft context, used to be 4096, now 0 which is the model max context which takes more vram, only required if draft model is present)
 *   12/21/2025 - 
     *  llamacpp build b7410 introduced -fit parameter. This default to be on and have noticed it cause major slowdown/OOM on previous working models. If you must use later llamacpp builds, add -fit off if you run into these issues. I will update this as needed. check https://github.com/ggml-org/llama.cpp/issues/18258 for further progress.
 *   12/18/2025 - 
