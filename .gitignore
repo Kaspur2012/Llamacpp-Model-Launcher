@@ -1,0 +1,17 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# User-specific config and models
+my_models.txt
+config.ini
+Llamacpp_Model_launcher/config.ini
+Llamacpp_Model_launcher/ui/config.ini
+
+# Claude Code
+.claude/
+
+# macOS
+.DS_Store

@@ -103,7 +103,7 @@ class LeftPanel(QWidget):
         self.view_stack = QStackedWidget()
         self.output_viewer = QTextEdit()
         self.output_viewer.setReadOnly(True)
-        self.output_viewer.setFont(QFont('Courier', 10))
+        self.output_viewer.setFont(QFont('Menlo', 10))
         self.parameter_browser = ParameterBrowser()
         self.help_viewer = QTextEdit()
         self.help_viewer.setReadOnly(True)

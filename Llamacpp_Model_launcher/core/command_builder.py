@@ -5,6 +5,8 @@ import re
 import subprocess
 from collections import namedtuple
 
+from .platform_utils import IS_WINDOWS
+
 Parameter = namedtuple('Parameter', ['key', 'value'])
 
 
@@ -34,8 +36,8 @@ class CommandBuilder:
             suffix_str = command_str[split_point:]
 
         try:
-            # Use windows-style parsing for the part that might contain unquoted paths
-            prefix_tokens = shlex.split(prefix_str, posix=False)
+            # Use windows-style parsing on Windows for unquoted paths, POSIX on macOS/Linux
+            prefix_tokens = shlex.split(prefix_str, posix=not IS_WINDOWS)
         except ValueError:
             prefix_tokens = prefix_str.split()  # Fallback for safety
 
@@ -89,4 +91,8 @@ class CommandBuilder:
         if executable:
             args_list.insert(0, executable)
 
-        return subprocess.list2cmdline(args_list) if args_list else ""
+        if not args_list:
+            return ""
+        if IS_WINDOWS:
+            return subprocess.list2cmdline(args_list)
+        return shlex.join(args_list)

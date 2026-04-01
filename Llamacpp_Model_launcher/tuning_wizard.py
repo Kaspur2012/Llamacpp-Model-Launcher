@@ -5,6 +5,7 @@ import requests
 import re
 import math
 from Llamacpp_Model_launcher.parameters_db import BENCHMARK_PROMPT
+from Llamacpp_Model_launcher.core.platform_utils import IS_MACOS
 
 try:
     import psutil
@@ -270,7 +271,7 @@ class TuningWizard:
             self.base_params['-mg'] = str(self.primary_gpu_id)
 
         is_dense_model = self.analysis.get('model_architecture') != 'Mixture of Experts (MoE)'
-        if is_multi_gpu and is_dense_model and has_draft_model:
+        if is_multi_gpu and is_dense_model and has_draft_model and not IS_MACOS:
             self.base_params['-devd'] = f'CUDA{self.primary_gpu_id}'
             yield {'action': 'log',
                    'message': f"> Pinning draft model to primary GPU with --device-draft {self.base_params['-devd']}."}

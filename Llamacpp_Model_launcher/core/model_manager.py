@@ -41,11 +41,11 @@ class ModelManager:
                 continue
 
             # A line is considered a model name if it's not a command
-            is_command = line.lower().startswith('llama-server.exe')
+            is_command = line.lower().startswith('llama-server')
 
             if not is_command:
                 # And the next line *is* a command
-                if (i + 1 < len(lines)) and lines[i + 1].strip().lower().startswith('llama-server.exe'):
+                if (i + 1 < len(lines)) and lines[i + 1].strip().lower().startswith('llama-server'):
                     current_model_name = line
             else:  # It is a command line
                 if current_model_name:

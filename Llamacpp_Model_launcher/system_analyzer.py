@@ -5,6 +5,8 @@ import re
 import subprocess
 import platform
 
+from Llamacpp_Model_launcher.core.platform_utils import IS_WINDOWS, IS_MACOS, get_subprocess_kwargs
+
 # --- Optional Dependencies ---
 try:
     import psutil
@@ -120,7 +122,7 @@ class SystemAnalyzer:
         try:
             command = ["nvidia-smi", "--query-gpu=name,memory.total,memory.used", "--format=csv,noheader,nounits"]
             process = subprocess.run(command, capture_output=True, text=True, check=True,
-                                     creationflags=subprocess.CREATE_NO_WINDOW)
+                                     **get_subprocess_kwargs())
             output = process.stdout.strip().split('\n')
             if not output or not output[0]:
                 yield "> nvidia-smi found 0 NVIDIA GPUs."
@@ -141,23 +143,54 @@ class SystemAnalyzer:
         except Exception as e:
             yield f"> An error occurred while running nvidia-smi: {e}"
 
-    def _get_gpu_info(self):
-        """Detects GPU information, preferring pynvml."""
-        yield "[ANALYSIS] Probing for available GPUs and VRAM..."
-        if platform.system() != "Windows":
-            yield "> GPU detection is currently only supported on Windows."
+    def _get_gpu_info_macos(self):
+        """Detects Apple Silicon GPU info using unified memory."""
+        if platform.machine() != "arm64":
+            yield "> Intel Mac detected. GPU acceleration via Metal is limited on Intel Macs."
             return
 
-        if PYNVML_AVAILABLE:
-            try:
-                yield from self._get_gpu_info_pynvml()
-            except Exception as e:
-                yield f"> pynvml failed with an error: {e}. Trying fallback..."
-                self.results["gpus"] = []
+        try:
+            chip_result = subprocess.run(
+                ["sysctl", "-n", "machdep.cpu.brand_string"],
+                capture_output=True, text=True, check=True
+            )
+            chip_name = chip_result.stdout.strip()
+        except Exception:
+            chip_name = "Apple Silicon"
+
+        if PSUTIL_AVAILABLE:
+            ram_info = psutil.virtual_memory()
+            total_gb = round(ram_info.total / (1024 ** 3), 2)
+            used_gb = round(ram_info.used / (1024 ** 3), 2)
+            free_gb = round(ram_info.available / (1024 ** 3), 2)
+        else:
+            total_gb, used_gb, free_gb = 0.0, 0.0, 0.0
+
+        vram_details = {"total_gb": total_gb, "used_gb": used_gb, "free_gb": free_gb}
+        self.results["gpus"].append({
+            "id": 0, "name": f"{chip_name} (Metal)", "vram": vram_details, "compute_cap": 0.0
+        })
+        yield f"  - GPU 0: {chip_name} (Metal) — {total_gb} GB unified memory ({free_gb} GB available)"
+
+    def _get_gpu_info(self):
+        """Detects GPU information, preferring pynvml on Windows and Metal on macOS."""
+        yield "[ANALYSIS] Probing for available GPUs and VRAM..."
+
+        if IS_MACOS:
+            yield from self._get_gpu_info_macos()
+        elif IS_WINDOWS:
+            if PYNVML_AVAILABLE:
+                try:
+                    yield from self._get_gpu_info_pynvml()
+                except Exception as e:
+                    yield f"> pynvml failed with an error: {e}. Trying fallback..."
+                    self.results["gpus"] = []
+                    yield from self._get_gpu_info_fallback()
+            else:
+                yield "> pynvml library not installed. Falling back to nvidia-smi..."
                 yield from self._get_gpu_info_fallback()
         else:
-            yield "> pynvml library not installed. Falling back to nvidia-smi..."
-            yield from self._get_gpu_info_fallback()
+            yield "> GPU detection is not yet supported on this platform."
 
         if not self.results["gpus"]:
             yield "> No compatible GPUs detected on the system."
@@ -233,14 +266,24 @@ class SystemAnalyzer:
 
     def get_live_vram_usage(self):
         """
-        Gets the current VRAM usage for all NVIDIA GPUs using pynvml.
-        Returns a dictionary or None if pynvml is not available or fails.
+        Gets the current VRAM usage. Uses pynvml on Windows (NVIDIA),
+        or unified memory stats on macOS Apple Silicon.
+        Returns a dictionary or None if unavailable.
         """
+        if IS_MACOS and platform.machine() == "arm64" and PSUTIL_AVAILABLE:
+            try:
+                ram_info = psutil.virtual_memory()
+                return {0: {
+                    "used_gb": round(ram_info.used / (1024 ** 3), 2),
+                    "total_gb": round(ram_info.total / (1024 ** 3), 2)
+                }}
+            except Exception:
+                return None
+
         if not PYNVML_AVAILABLE:
             return None
 
         try:
-            # --- FIX: Removed nvmlInit() call. ---
             device_count = pynvml.nvmlDeviceGetCount()
             vram_stats = {}
             for i in range(device_count):

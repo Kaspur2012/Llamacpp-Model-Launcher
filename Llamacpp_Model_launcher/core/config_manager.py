@@ -13,12 +13,18 @@ class ConfigManager:
     def load_config(self):
         """
         Loads the Llama.cpp directory and models file path from config.ini.
+        If config.ini doesn't exist but config.ini.example does, copies it.
         Returns:
             A tuple (llamacpp_dir, models_file).
         """
         config = configparser.ConfigParser()
         llamacpp_dir = ''
         models_file = ''
+        if not os.path.exists(self.config_file):
+            example = self.config_file + '.example'
+            if os.path.exists(example):
+                import shutil
+                shutil.copy(example, self.config_file)
         if os.path.exists(self.config_file):
             config.read(self.config_file)
             if 'Paths' in config:

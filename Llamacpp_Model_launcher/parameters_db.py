@@ -1,13 +1,18 @@
 # parameters_db.py
 
+import platform as _platform
+
+_IS_WINDOWS = _platform.system() == "Windows"
 
 # --- NEW: Help documentation is now stored here and imported by the main app ---
-HELP_DOCUMENTATION = """
+_server_exe = "llama-server.exe" if _IS_WINDOWS else "llama-server"
+
+HELP_DOCUMENTATION = r"""
 ## Llama.cpp Model Launcher: User Guide
 
 ### 1. Introduction
 
-Welcome to the Llama.cpp Model Launcher! This application is a powerful graphical interface for `llama-server.exe`. It transforms the complex command-line experience into a modern desktop workflow.
+Welcome to the Llama.cpp Model Launcher! This application is a powerful graphical interface for `llama-server`. It transforms the complex command-line experience into a modern desktop workflow.
 
 Beyond just launching models, this version features an intelligent **Tuning Wizard** that benchmarks your specific hardware (CPU, RAM, GPUs) against your model to automatically calculate the optimal configuration for maximum speed and context size.
 
@@ -15,7 +20,8 @@ Beyond just launching models, this version features an intelligent **Tuning Wiza
 
 1.  **Set the Llama.cpp Directory**:
     *   Click **Browse...** next to "Llama.cpp Directory".
-    *   Select the folder containing your `llama-server.exe`.
+    *   **macOS (Homebrew)**: Select `/opt/homebrew/bin` (where `brew install llama.cpp` places `llama-server`).
+    *   **Windows**: Select the folder containing your `llama-server.exe`.
 2.  **Set the Models File**:
     *   Click **Browse...** next to "Models File".
     *   Select your `.txt` file containing model commands.
@@ -62,10 +68,11 @@ The Tuning Wizard is an automated system that finds the "Perfect Fit" for your m
 **Tuning Assistant Options:**
 *   **Offload Strategy**:
     *   **Single GPU**: Forces the model onto your main GPU. Best for speed if it fits.
-    *   **Multi-GPU (VRAM)**: Splits the model across all GPUs.
-    *   **Multi-GPU + CPU**: Uses all VRAM, then spills the rest to System RAM.
+    *   **macOS Apple Silicon**: Your Mac has a single GPU with unified memory (shared between CPU and GPU). The wizard will use this automatically — multi-GPU options do not apply.
+    *   **Multi-GPU (VRAM)**: *(Windows/NVIDIA only)* Splits the model across all GPUs.
+    *   **Multi-GPU + CPU**: *(Windows/NVIDIA only)* Uses all VRAM, then spills the rest to System RAM.
 *   **Maximize Context**: If checked, the wizard will try to increase the Context Size (`-c`) as high as possible without crashing.
-*   **Ensure Safe Overhead**: If checked, the wizard reserves ~600MB VRAM and ~1GB RAM for the OS to prevent system freezing. **Uncheck this at your own risk.**
+*   **Ensure Safe Overhead**: If checked, the wizard reserves a memory buffer for the OS to prevent system freezing. **Uncheck this at your own risk.**
 *   **Target Limit**: You can set a specific context limit (e.g., 16384), or leave it on "Auto" to go as high as hardware permits.
 
 **What the Wizard Does:**
@@ -80,10 +87,11 @@ The Tuning Wizard is an automated system that finds the "Perfect Fit" for your m
 ### 5. Safety Features
 
 **Resource Guard**:
-The application monitors your system RAM and VRAM in real-time while loading models.
-*   **Trigger**: If System RAM drops below **1.0 GB** (or VRAM below critical levels).
+The application monitors your system memory in real-time while loading models.
+*   **Trigger**: If available memory drops below critical levels.
 *   **Action**: The application immediately kills the `llama-server` process.
 *   **Why?**: This prevents your computer from freezing or crashing due to memory starvation (Swap Death).
+*   **macOS Note**: On Apple Silicon, RAM and "VRAM" are the same unified memory pool. The guard monitors total system RAM.
 *   *Note: You can disable this by unchecking "Ensure Safe Resource Overhead" in the Tuning Wizard, but this is dangerous.*
 
 **MoE Infinite Loop Protection**:
@@ -93,17 +101,29 @@ When tuning large models, the wizard detects if the model is too large for your 
 
 ### 6. Advanced Tips
 
-*   **Tensor Split (-ts)**: For multi-GPU setups, the wizard automatically calculates the split ratio based on the VRAM capacity of each card.
-*   **Vision Models**: The app detects `Qwen2-VL` and similar architectures. If you tune a vision model, it will prompt you to add the `--mmproj` (projector file) if missing.
+*   **Tensor Split (-ts)**: *(Windows/NVIDIA multi-GPU only)* The wizard automatically calculates the split ratio based on the VRAM capacity of each card.
+*   **Apple Silicon**: Use `-ngl 999` to offload all layers to the Metal GPU. With unified memory, there is no separate "VRAM" — the GPU and CPU share the same RAM pool. The `--no-mmap` flag is generally NOT recommended on macOS; the default mmap provides faster loading and efficient memory management.
+*   **Vision Models**: The app detects `Qwen2-VL`, `Qwen3.5` and similar architectures. Use `--mmproj` to point to the vision projector file (e.g., `mmproj-F32.gguf`) to enable image input.
 *   **Speculative Decoding**: If you have a draft model selected (`-md`), the wizard optimizes settings for both the main and draft models simultaneously.
 
-### 7. Troubleshooting
+### 7. Quick Launch (macOS)
 
-*   **"Load Model" does nothing**: Check your Llama.cpp Directory path.
-*   **Resource Guard keeps killing my model**: Your model is too big for your physical RAM+VRAM. Try a higher quantization (e.g., Q4 instead of Q8) or a smaller context size.
-*   **Tuning fails with "Soft Failure"**: The server launched but didn't output text. This often happens with incompatible CUDA versions or corrupted model files.
+Instead of navigating to the project directory each time, add a shell alias to your `~/.zshrc`:
 
-### 8. Some stuff about -ot command
+```
+alias llama-launcher='cd "/path/to/Llamacpp-Model-Launcher" && source venv/bin/activate && python run_app.py'
+```
+
+Then open a new terminal and type `llama-launcher` from anywhere.
+
+### 8. Troubleshooting
+
+*   **"Load Model" does nothing**: Check your Llama.cpp Directory path. On macOS with Homebrew, this should be `/opt/homebrew/bin`.
+*   **Resource Guard keeps killing my model**: Your model is too big for your physical memory. Try a higher quantization (e.g., Q4 instead of Q8) or a smaller context size.
+*   **Tuning fails with "Soft Failure"**: The server launched but didn't output text. This often happens with incompatible CUDA versions (Windows) or corrupted model files.
+*   **macOS: Model path has spaces**: Paths with spaces (e.g., `/Volumes/My Drive/models/...`) are handled automatically. Use backslash-escaping in the models file (e.g., `My\ Drive`).
+
+### 9. Some stuff about -ot command
 ## Mastering `llamacpp`'s `-ot` Command for Optimized Performance
 
 For enthusiasts and practitioners leveraging the power of `llamacpp` for local large language model inference, optimizing performance, especially on systems with limited VRAM, is a paramount concern. Among the arsenal of command-line arguments available, the `-ot` (or `--override-tensor`) command stands out as a powerful tool for fine-grained control over model layer offloading. This comprehensive guide will demystify the `-ot` command, its parameters, and provide practical examples to help you unlock its full potential.
@@ -188,8 +208,9 @@ from gguf import GGUFReader
 
 # --- IMPORTANT ---
 # Change this path to the full path of YOUR model file.
-# Use forward slashes / instead of backslashes \.
-MODEL_PATH = "D:/lm_studio/unsloth/Llama-3.3-70B-Instruct-GGUF/Llama-3.3-70B-Instruct-UD-IQ3_XXS.gguf"
+# macOS example: "/Volumes/Drive/models/your-model.gguf"
+# Windows example: "D:/lm_studio/models/your-model.gguf"
+MODEL_PATH = "/path/to/your/model.gguf"
 
 print(f"Reading tensors from: {MODEL_PATH}\n")
 
@@ -225,7 +246,7 @@ for i in range(min(10, len(sorted_tensors))):
 -------------------------------------------------------------------------------------
 
 
-Some examples: 
+Some examples (use CUDA0 on Windows/NVIDIA, Metal on macOS Apple Silicon):
 
 
 -ot token_embd.weight=CUDA0
@@ -240,6 +261,8 @@ put ffn_gate.weight of first 80 layer onto gpu 0
 -ot blk.[0-9].ffn_up.weight=CUDA0
 
 -ot blk.[0-9].ffn_down.weight=CUDA0
+
+Note: On macOS Apple Silicon, all layers are already in unified memory accessible by both CPU and GPU, so -ot overrides are primarily useful for forcing specific tensors to CPU-only processing to free up GPU compute resources.
 """
 
 # This file contains the structured database of all Llama.cpp parameters.
@@ -254,8 +277,8 @@ LLAMA_CPP_PARAMETERS = [
         "name": "File Paths",
         "collapsed": False,
         "parameters": [
-            {'name': 'Server Path', 'id': 'server-path', 'type': 'text', 'default': '', 'description': 'Path to llama-server.exe file without quotes. Example: D:\\NEURAL\\LlamaCpp\\CUDA\\llama-server', 'required': True, 'prefix': ''},
-            {'name': 'Model Path', 'id': 'model-path', 'type': 'text', 'default': '', 'description': 'Path to model GGUF file without quotes. Example: D:\\NEURAL\\models\\Qwen3-30B-A3B-Instruct-2507-Q6_K\\Qwen3-30B-A3B-Instruct-2507-Q6_K.gguf', 'required': True, 'prefix': '-m'},
+            {'name': 'Server Path', 'id': 'server-path', 'type': 'text', 'default': '', 'description': f'Path to {_server_exe} file without quotes. Example: {"D:\\\\NEURAL\\\\LlamaCpp\\\\CUDA\\\\llama-server" if _IS_WINDOWS else "/opt/homebrew/bin/llama-server"}', 'required': True, 'prefix': ''},
+            {'name': 'Model Path', 'id': 'model-path', 'type': 'text', 'default': '', 'description': f'Path to model GGUF file without quotes. Example: {"D:\\\\NEURAL\\\\models\\\\Qwen3-30B-A3B-Instruct-2507-Q6_K\\\\Qwen3-30B-A3B-Instruct-2507-Q6_K.gguf" if _IS_WINDOWS else "/Users/you/models/Qwen3-30B-A3B-Instruct-2507-Q6_K.gguf"}', 'required': True, 'prefix': '-m'},
         ]
     },
     {
