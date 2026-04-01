@@ -2,7 +2,7 @@ Llamacpp-Model-Launcher
 
 The Llamacpp-Model-Launcher is a desktop application designed to simplify the process of managing and running your language models. It replaces the need for typing lengthy and complex commands into a terminal with an intuitive, point-and-click interface. You can easily manage, edit, delete, duplicate, and run all your language models.
 
-Please Note: This application was developed for Windows+Nvidia and has not been tested on other operating systems. Feel free to change code for other operating system, changes needed should not be much.
+**Supported Platforms:** Windows (NVIDIA CUDA) and macOS (Apple Silicon with Metal).
 
 ![alt text](https://github.com/Kaspur2012/Llamacpp-Model-Launcher/blob/main/Main_UI.PNG)
 
@@ -212,22 +212,49 @@ flowchart TD
 
 ## Running the Application
 
-There are two primary ways to run this application:
+There are three ways to run this application:
 
 <details>
-<summary><strong>Method 1: Run from Python Source</strong></summary>
+<summary><strong>Method 1: Run from Python Source (macOS)</strong></summary>
 
-This method is ideal for developers or users who have Python installed and are comfortable with a code editor.
+1.  **Install llama.cpp** (if not already installed):
+    ```bash
+    brew install llama.cpp
+    ```
+2.  **Clone the repo and set up the environment**:
+    ```bash
+    git clone https://github.com/NeshaLe/Llamacpp-Model-Launcher.git
+    cd Llamacpp-Model-Launcher
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install PyQt6 psutil requests
+    ```
+3.  **Run the app**:
+    ```bash
+    python run_app.py
+    ```
+4.  **First-time setup in the UI**:
+    *   Set **Llama.cpp Directory** to `/opt/homebrew/bin`
+    *   Set **Models File** to a `.txt` file with your model configs (see `model_file_examples.txt` for macOS examples)
+
+**Optional:** Add a shell alias to launch from anywhere:
+```bash
+echo 'alias llama-launcher='"'"'cd "/path/to/Llamacpp-Model-Launcher" && source venv/bin/activate && python run_app.py'"'"'' >> ~/.zshrc
+```
+</details>
+
+<details>
+<summary><strong>Method 2: Run from Python Source (Windows)</strong></summary>
 
 1.  **Install Dependencies**: The application requires the PyQt6 library. Install it using pip:
     ```bash
-    pip install PyQt6
+    pip install PyQt6 psutil requests pynvml
     ```
 2.  **Run the Script**: Save the application code as a Python file (e.g., Llama_Model_Loader.py, parameters_db.py, model_file_examples.txt in the same directory) and run it from your terminal or preferred code editor.
 </details>
 
 <details>
-<summary><strong>Method 2: Compile to a Standalone Executable (.exe)</strong></summary>
+<summary><strong>Method 3: Compile to a Standalone Executable (.exe) (Windows)</strong></summary>
 
 I have uploaded the latest exe file but it is highly recommended you build it yourself.
 
@@ -318,13 +345,16 @@ Here’s how it works:
 
 This is a deliberate design choice to favor speed, but we recognize that some users prioritize context length above all else. Future versions may include a dedicated "Context First" tuning mode.
 
-#### **2. Windows-Only Support**
+#### **2. Platform Support**
 
-The application was developed and tested exclusively on the **Windows operating system**. It relies on Windows-specific APIs and command-line behavior (like `.bat` files for execution and `taskkill` for process management). It is not expected to work on macOS or Linux without significant modifications.
+*   **Windows + NVIDIA**: Full support with CUDA GPU detection, `.bat` process execution, and `taskkill` process management.
+*   **macOS Apple Silicon**: Full support with Metal GPU detection, unified memory reporting, and direct process management. Tested on M4 Max with 128GB unified memory.
+*   **macOS Intel / Linux**: Not tested. The app may work but GPU detection will be limited.
 
-#### **3. NVIDIA GPU Required**
+#### **3. GPU Support**
 
-All hardware analysis, VRAM measurement, and offloading logic are built around **NVIDIA's CUDA platform** and its associated libraries (`pynvml`). The application has no code for detecting or utilizing AMD or Intel GPUs, and they are not supported.
+*   **Windows**: NVIDIA GPUs only (via `pynvml` / `nvidia-smi`). AMD and Intel GPUs are not supported.
+*   **macOS**: Apple Silicon Metal GPU with unified memory. The app reports system RAM as GPU memory since they share the same pool. Multi-GPU strategies do not apply — Apple Silicon has a single GPU.
 
 #### **4. Hardware Testing Scope**
 
