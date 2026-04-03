@@ -279,6 +279,31 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 ##   Change Log
 
+*   04/03/2026 - 
+    * ## Merged PR from NeshaLe for Add macOS Apple Silicon support, summary below, Thank You NeshaLe: 
+
+		* Adds full macOS Apple Silicon support while keeping all Windows code paths untouched.
+
+		* **Cross-platform process lifecycle**: Direct QProcess launch on macOS (no .bat files), SIGKILL for unload
+		* **Apple Silicon GPU detection**: Detects Metal GPU via sysctl, reports unified memory as VRAM
+		* **Cross-platform command building**: POSIX shlex parsing and `shlex.join()` on macOS
+		* **Platform utilities module**: Centralized `IS_WINDOWS`/`IS_MACOS` checks, `get_executable_name()`, `kill_process_tree()`
+		* **Model file parsing**: Accepts both `llama-server` and `llama-server.exe`
+		* **Tuning wizard**: Skips CUDA device pinning on macOS, Metal OOM detection
+		* **Help docs**: Updated with Apple Silicon guidance (unified memory, mmap, setup instructions)
+		* **QoL fixes**: Button state fix for macOS, font fix (Menlo), SyntaxWarning fix, `config.ini.example` with auto-copy on first launch
+
+	## Tested on
+	* Apple M4 Max, 128GB unified memory
+	* llama.cpp installed via Homebrew (`brew install llama.cpp`)
+	* Qwen3.5-27B and Qwen3.5-35B models with 262K context
+	* Load, unload, vision (--mmproj), and web UI all working
+	
+	> As you mentioned in your Reddit post: "if you clone the repository and throw it in Gemini or similar sota, you can easily get it to work with Mac" — that's exactly what we did here. Great app, thanks for building it!
+	
+	🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
 *   01/01/2026 - 
     *  Due to recent changes to llamacpp, the following parameters are added as default: 
 		*  -np 1(this refer to concurrent parallelism, before it was default 1 now 4 which seem to require more vram/ram, turn this off if you require multiple concurrent chats)
