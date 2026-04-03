@@ -1,0 +1,7 @@
+[Paths]
+# macOS (Homebrew): llamacppdir = /opt/homebrew/bin
+# Windows: llamacppdir = D:/llamacpp/llama-b7028-bin-win-cuda-12.4-x64
+llamacppdir =
+
+# Path to your models .txt file (model name on line 1, command on line 2)
+modelsfile =

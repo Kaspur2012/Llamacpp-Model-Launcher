@@ -112,3 +112,15 @@ llama-server.exe -m D:\lm_studio\bartowski\nvidia_Llama-3_3-Nemotron-Super-49B-v
 
 Qwen3-Next-80B-A3B-Thinking-UD-Q4_K_XL
 llama-server.exe -m D:/lm_studio/unsloth/Qwen3-Next-80B-A3B-Thinking-GGUF/Qwen3-Next-80B-A3B-Thinking-UD-Q4_K_XL.gguf -c 262144 --jinja --temp 0.6 --top-k 20 --top-p 0.95 --min-p 0 --no-warmup -ngl 99 -ctk q8_0 -ctv q8_0 --flash-attn on --no-mmap -mg 0 -ncmoe 21 -ts 0.848,0.152
+
+
+-----macOS Metal Examples (Apple Silicon)-----
+
+Qwen3.5-27B-macOS-Coding
+llama-server -m /path/to/models/Qwen3.5-27B-UD-Q8_K_XL.gguf --mmproj /path/to/models/mmproj-F32.gguf --jinja -c 262144 -ngl 999 -fa on --temp 0.1 --top-k 40 --top-p 0.95 --min-p 0.05 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup
+
+Qwen3.5-35B-A3B-macOS-Coding
+llama-server -m /path/to/models/Qwen3.5-35B-A3B-Q8_0.gguf --mmproj /path/to/models/mmproj-F32.gguf --jinja -c 262144 -ngl 999 -fa on --temp 0.1 --top-k 40 --top-p 0.95 --min-p 0.05 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup
+
+Devstral-Small-macOS-Chat
+llama-server -m /path/to/models/Devstral-Small-2507-Q6_K.gguf --jinja -c 64000 -ngl 999 -fa on --temp 0.7 --top-k 64 --top-p 0.95 --min-p 0.05 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup

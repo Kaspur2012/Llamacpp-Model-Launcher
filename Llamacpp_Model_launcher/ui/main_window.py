@@ -1,6 +1,7 @@
 # ui/main_window.py
 
 import os
+import shlex
 import subprocess
 import tempfile
 import webbrowser
@@ -16,6 +17,7 @@ from Llamacpp_Model_launcher.core import (
     CommandBuilder,
     Parameter
 )
+from Llamacpp_Model_launcher.core.platform_utils import IS_WINDOWS, IS_MACOS, get_executable_name, get_default_model_path_example, kill_process_tree
 from Llamacpp_Model_launcher.core.workers import ApiRequestWorker, StabilityRequestWorker
 
 from Llamacpp_Model_launcher.system_analyzer import SystemAnalyzer
@@ -87,6 +89,7 @@ class MainWindow(QWidget):
             re.IGNORECASE | re.DOTALL
         )
         self.cuda_device_regex = re.compile(r"Device\s+(\d+):\s+([^,]+),", re.IGNORECASE)
+        self.metal_oom_regex = re.compile(r"ggml_metal.*error|Metal.*allocation.*fail|newBufferWithLength.*failed", re.IGNORECASE)
         self.soft_failure_regex = re.compile(r"eval time\s*=\s*0\.00\s*ms\s*/\s*1\s*tokens", re.IGNORECASE)
 
         self.wizard_found_layers = None
@@ -658,7 +661,7 @@ class MainWindow(QWidget):
             count += 1;
             new_name = f"{base_name} {count}"
         default_params = [
-            Parameter('Executable', 'llama-server.exe'), Parameter('-m', 'D:\\path_to_your_model.gguf'),
+            Parameter('Executable', get_executable_name()), Parameter('-m', get_default_model_path_example()),
             Parameter('-c', '4096'), Parameter('--jinja', None), Parameter('--temp', '0.7'),
             Parameter('--top-k', '40'), Parameter('--top-p', '0.95'), Parameter('--min-p', '0.05'),
         ]
@@ -722,7 +725,7 @@ class MainWindow(QWidget):
         if not is_webui_enabled: self.left_panel.open_on_load_checkbox.setChecked(False)
 
     def update_button_states(self):
-        is_running = self.process is not None and self.process.state() == QProcess.ProcessState.Running
+        is_running = self.process is not None and self.process.state() != QProcess.ProcessState.NotRunning
         can_load = not is_running and bool(self.llamacpp_dir) and bool(self.model_manager.models)
         self.left_panel.update_button_states(can_load, is_running)
 
@@ -811,20 +814,26 @@ class MainWindow(QWidget):
             command_str += ' --no-webui'
         else:
             command_str = re.sub(r'\s+--no-webui\b', '', command_str)
-        try:
-            temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.bat', delete=False, encoding='utf-8')
-            self.temp_batch_file = temp_file.name
-            temp_file.write(f'@echo off\n{command_str}')
-            temp_file.close()
-        except Exception as e:
-            QMessageBox.critical(self, "File Error", f"Could not create temp batch file:\n{e}");
-            return
-        self.process = QProcess();
+        self.process = QProcess()
         self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
-        self.process.readyReadStandardOutput.connect(self.handle_stdout);
+        self.process.readyReadStandardOutput.connect(self.handle_stdout)
         self.process.finished.connect(self.process_finished)
-        self.process.setWorkingDirectory(self.llamacpp_dir);
-        self.process.start(self.temp_batch_file)
+        self.process.setWorkingDirectory(self.llamacpp_dir)
+        if IS_WINDOWS:
+            try:
+                temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.bat', delete=False, encoding='utf-8')
+                self.temp_batch_file = temp_file.name
+                temp_file.write(f'@echo off\n{command_str}')
+                temp_file.close()
+            except Exception as e:
+                QMessageBox.critical(self, "File Error", f"Could not create temp batch file:\n{e}")
+                return
+            self.process.start(self.temp_batch_file)
+        else:
+            tokens = shlex.split(command_str)
+            program = tokens[0]
+            args = tokens[1:]
+            self.process.start(program, args)
         self.left_panel.set_status(ServerStatus.LOADING);
         self.update_button_states()
 
@@ -982,10 +991,23 @@ class MainWindow(QWidget):
         self.stability_thread.start()
 
     def unload_model(self):
-        if self.process and self.process.state() == QProcess.ProcessState.Running:
-            self.log_diagnostic("[DIAGNOSTICS] Unloading model via taskkill.")
-            subprocess.run(f'taskkill /F /T /PID {self.process.processId()}', shell=True, capture_output=True,
-                           creationflags=subprocess.CREATE_NO_WINDOW)
+        if self.process:
+            state = self.process.state()
+            pid = self.process.processId()
+            self.log_diagnostic(f"[DIAGNOSTICS] Unload requested. Process state={state}, PID={pid}")
+            if state != QProcess.ProcessState.NotRunning:
+                if IS_WINDOWS:
+                    self.log_diagnostic("[DIAGNOSTICS] Unloading model via taskkill.")
+                    kill_process_tree(pid)
+                else:
+                    self.log_diagnostic(f"[DIAGNOSTICS] Unloading model via kill (PID {pid}).")
+                    import signal
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    self.process.kill()
+                    self.process.waitForFinished(3000)
 
     def start_tuning_wizard(self):
         self.left_panel.show_output_view();
