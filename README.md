@@ -279,6 +279,14 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 ##   Change Log
 
+*   07/07/2026 -
+    *   **Windows path handling fix**: `shlex.split` now uses non-POSIX mode on Windows to properly preserve backslashes in file paths
+    *   **f-string backslash fix**: Extracted Windows example paths into dedicated variables (avoids backslash escaping issues in f-strings on Python < 3.12)
+    *   **Chat template file browser**: Added "Browse..." button for `--chat-template-file` parameter with Jinja/text file filter
+    *   **Refactored `_browse_file`**: Now accepts custom file type filters for flexible reuse
+    *   **Added `.idea/` to `.gitignore`** (PyCharm IDE config)
+    *   **Initialized `CHANGELOG.md`**
+
 *   04/03/2026 - 
     * ## Merged PR from NeshaLe for Add macOS Apple Silicon support, summary below, Thank You NeshaLe: 
 
