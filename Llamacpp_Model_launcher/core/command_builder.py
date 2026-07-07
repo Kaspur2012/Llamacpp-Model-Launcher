@@ -42,8 +42,8 @@ class CommandBuilder:
             prefix_tokens = prefix_str.split()  # Fallback for safety
 
         try:
-            # Use POSIX-style parsing for regular flags and arguments
-            suffix_tokens = shlex.split(suffix_str, posix=True)
+            # Use platform-appropriate parsing to preserve backslashes in paths on Windows
+            suffix_tokens = shlex.split(suffix_str, posix=not IS_WINDOWS)
         except ValueError:
             suffix_tokens = suffix_str.split()  # Fallback
 

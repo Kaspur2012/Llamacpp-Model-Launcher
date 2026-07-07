@@ -272,13 +272,17 @@ Note: On macOS Apple Silicon, all layers are already in unified memory accessibl
 # thanks https://x.com/unmortan for the info you see below
 # https://www.reddit.com/r/LocalLLaMA/comments/1opx9k2/comment/nnf2gr9/?context=1
 
+# Example paths for descriptions (backslashes can't be inside f-string expressions in Python < 3.12)
+_windows_server_example = "D:\\NEURAL\\LlamaCpp\\CUDA\\llama-server"
+_windows_model_example = "D:\\NEURAL\\models\\Qwen3-30B-A3B-Instruct-2507-Q6_K\\Qwen3-30B-A3B-Instruct-2507-Q6_K.gguf"
+
 LLAMA_CPP_PARAMETERS = [
     {
         "name": "File Paths",
         "collapsed": False,
         "parameters": [
-            {'name': 'Server Path', 'id': 'server-path', 'type': 'text', 'default': '', 'description': f'Path to {_server_exe} file without quotes. Example: {"D:\\\\NEURAL\\\\LlamaCpp\\\\CUDA\\\\llama-server" if _IS_WINDOWS else "/opt/homebrew/bin/llama-server"}', 'required': True, 'prefix': ''},
-            {'name': 'Model Path', 'id': 'model-path', 'type': 'text', 'default': '', 'description': f'Path to model GGUF file without quotes. Example: {"D:\\\\NEURAL\\\\models\\\\Qwen3-30B-A3B-Instruct-2507-Q6_K\\\\Qwen3-30B-A3B-Instruct-2507-Q6_K.gguf" if _IS_WINDOWS else "/Users/you/models/Qwen3-30B-A3B-Instruct-2507-Q6_K.gguf"}', 'required': True, 'prefix': '-m'},
+            {'name': 'Server Path', 'id': 'server-path', 'type': 'text', 'default': '', 'description': f'Path to {_server_exe} file without quotes. Example: {_windows_server_example if _IS_WINDOWS else "/opt/homebrew/bin/llama-server"}', 'required': True, 'prefix': ''},
+            {'name': 'Model Path', 'id': 'model-path', 'type': 'text', 'default': '', 'description': f'Path to model GGUF file without quotes. Example: {_windows_model_example if _IS_WINDOWS else "/Users/you/models/Qwen3-30B-A3B-Instruct-2507-Q6_K.gguf"}', 'required': True, 'prefix': '-m'},
         ]
     },
     {

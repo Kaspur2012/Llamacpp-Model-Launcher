@@ -15,3 +15,6 @@ Llamacpp_Model_launcher/ui/config.ini
 
 # macOS
 .DS_Store
+
+# IDE
+.idea/

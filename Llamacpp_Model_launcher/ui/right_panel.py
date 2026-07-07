@@ -112,9 +112,10 @@ class RightPanel(QWidget):
 
         self.clear_dirty_state()
 
-    def _browse_file(self, line_edit):
+    def _browse_file(self, line_edit, file_filter=None):
         """Helper to open file dialog and set line edit text."""
-        file_filter = "GGUF Files (*.gguf);;All Files (*)"
+        if file_filter is None:
+            file_filter = "GGUF Files (*.gguf);;All Files (*)"
         path, _ = QFileDialog.getOpenFileName(self, "Select File", "", file_filter)
         if path:
             line_edit.setText(path)
@@ -126,12 +127,22 @@ class RightPanel(QWidget):
         field_layout.setContentsMargins(0, 0, 0, 0)
 
         # Logic to decide which input widget to create
-        if param_key in ("-m", "--model", "-md", "--model-draft", "--mmproj"):
+        # File path parameters that get a Browse button
+        gguf_params = ("-m", "--model", "-md", "--model-draft", "--mmproj")
+        template_params = ("--chat-template-file",)
+
+        if param_key in gguf_params:
             input_widget = QLineEdit(param_value)
             browse_button = QPushButton("Browse...")
             browse_button.setProperty("param_type", param_key)
-            # Connect the browse button to the helper method
             browse_button.clicked.connect(lambda _, le=input_widget: self._browse_file(le))
+            field_layout.addWidget(input_widget)
+            field_layout.addWidget(browse_button)
+        elif param_key in template_params:
+            input_widget = QLineEdit(param_value)
+            browse_button = QPushButton("Browse...")
+            browse_button.setProperty("param_type", param_key)
+            browse_button.clicked.connect(lambda _, le=input_widget: self._browse_file(le, "Jinja Templates (*.jinja);;Text Files (*.txt *.jinja *.json);;All Files (*)"))
             field_layout.addWidget(input_widget)
             field_layout.addWidget(browse_button)
         elif param_value is None:
