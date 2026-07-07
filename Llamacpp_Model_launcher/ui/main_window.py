@@ -67,8 +67,12 @@ class MainWindow(QWidget):
         self.layer_count_regex = re.compile(r"n_layer\s*=\s*(\d+)", re.IGNORECASE)
         self.context_length_regex = re.compile(r"[a-zA-Z0-9_.-]+\.context_length\s+u32\s+=\s+(\d+)", re.IGNORECASE)
 
-        # Capture KV Cache stats
+        # Capture KV Cache stats (old format)
         self.kv_cache_regex = re.compile(r"llama_kv_cache:\s+size\s+=\s+([\d.]+)\s+MiB\s+\(\s*(\d+)\s+cells")
+        # Capture KV Cache from new memory breakdown table (llama.cpp b9870+)
+        # Format: |   - CUDA0 (RTX 3090)       | 24575 = 23300 + ( 1139 =   586 +       0 +     552) +         135 |
+        # Groups: device_id, context_mib, compute_mib
+        self.kv_memory_table_regex = re.compile(r"\|\s*-\s*(CUDA\d+)\s*\([^)]+\)\s+\|\s*[\d.]+\s*=\s*[\d.]+\s*\+\s*\([^)]*\+\s+([\d.]+)\s*\+\s+([\d.]+)\)\s*\+")
 
         # Capture Model Load Buffers (Resource Guard)
         self.buffer_cpu_regex = re.compile(r"load_tensors:\s+CPU model buffer size\s+=\s+([\d.]+)\s+MiB", re.IGNORECASE)
@@ -88,7 +92,8 @@ class MainWindow(QWidget):
             r"ggml-cuda\.cu:\d+:\s+CUDA\s+error.*out\s+of\s+memory.*current\s+device:\s+(\d+)",
             re.IGNORECASE | re.DOTALL
         )
-        self.cuda_device_regex = re.compile(r"Device\s+(\d+):\s+([^,]+),", re.IGNORECASE)
+        # Match new format: "CUDA0   : NVIDIA GeForce RTX 3090 (24575 MiB, ..."
+        self.cuda_device_regex = re.compile(r"(CUDA)?(\d+)\s*:\s+([^,(]+)\s*\(", re.IGNORECASE)
         self.metal_oom_regex = re.compile(r"ggml_metal.*error|Metal.*allocation.*fail|newBufferWithLength.*failed", re.IGNORECASE)
         self.soft_failure_regex = re.compile(r"eval time\s*=\s*0\.00\s*ms\s*/\s*1\s*tokens", re.IGNORECASE)
 
@@ -184,7 +189,7 @@ class MainWindow(QWidget):
             if not self.output_update_timer.isActive(): self.output_update_timer.start()
 
             if self.analysis_results is not None:
-                # 1. Capture KV Stats
+                # 1. Capture KV Stats (old format: llama_kv_cache line)
                 kv_matches = self.kv_cache_regex.finditer(self.output_buffer) if self.wizard_current_is_viability_check == 'kv_probe' else []
                 found_new_kv = False
                 for match in kv_matches:
@@ -203,6 +208,33 @@ class MainWindow(QWidget):
                                     f"[DIAGNOSTICS] KV Cache Detected: {size_mib} MiB. Total Unique: {total_mib} MiB. Cost: {mb_per_token:.4f} MB/token")
                     except (ValueError, IndexError):
                         pass
+
+                # 1b. Capture KV Stats from new memory breakdown table (llama.cpp b9870+)
+                if self.wizard_current_is_viability_check == 'kv_probe' and self.analysis_results.get('kv_mb_per_token', 0) <= 0:
+                    mem_table_matches = self.kv_memory_table_regex.finditer(self.output_buffer)
+                    for match in mem_table_matches:
+                        try:
+                            device_label = match.group(1)  # e.g. "CUDA0"
+                            context_mib = float(match.group(2))  # context (KV cache) MiB
+                            if context_mib > 0:
+                                # Derive total tokens from probe params
+                                # Probe uses -c 4096, n_parallel defaults to 4 slots
+                                probe_ctx = int(self.initial_params.get('-c', 4096)) if hasattr(self, 'initial_params') else 4096
+                                # n_ctx_slot may be capped to n_ctx_train; use the actual context from log
+                                actual_ctx = self.wizard_found_context if self.wizard_found_context else probe_ctx
+                                n_slots = 4  # default n_parallel
+                                total_tokens = actual_ctx * n_slots
+                                entry = (context_mib, device_label)
+                                if entry not in self.captured_kv_entries:
+                                    self.captured_kv_entries.append(entry)
+                                    found_new_kv = True
+                                    total_mib = sum(e[0] for e in self.captured_kv_entries if isinstance(e[0], (int, float)))
+                                    if total_tokens > 0:
+                                        mb_per_token = total_mib / total_tokens
+                                        self.analysis_results['kv_mb_per_token'] = mb_per_token
+                                        print(f"[DIAGNOSTICS] KV Cache (memory table) {device_label}: {context_mib} MiB context. Cost: {mb_per_token:.4f} MB/token")
+                        except (ValueError, IndexError):
+                            pass
 
                 # Early Probe Exit
                 if found_new_kv and self.wizard_is_benchmarking and self.wizard_current_is_viability_check == "kv_probe":
@@ -271,7 +303,7 @@ class MainWindow(QWidget):
                         self.left_panel.append_output(f"[WIZARD] Detected MoE signature (Count: {count}).")
 
                 # --- NEW: Truth-based Architecture Detection (print_info) ---
-                n_expert_match = re.search(r"print_info:\s+n_expert\s+=\s+(\d+)", self.output_buffer)
+                n_expert_match = re.search(r"print_info:\s*n_expert\s*=\s*(\d+)", self.output_buffer)
                 if not self.wizard_found_expert_count and n_expert_match:
                     count = int(n_expert_match.group(1))
                     if count > 0:
@@ -297,8 +329,13 @@ class MainWindow(QWidget):
                 gpu_matches = self.cuda_device_regex.finditer(self.output_buffer)
                 for match in gpu_matches:
                     try:
-                        gpu_id = int(match.group(1))
-                        gpu_name = match.group(2).strip()
+                        # New regex: groups = (cuda_prefix, id, name) or (id, name) for old format
+                        if match.lastindex >= 3:
+                            gpu_id = int(match.group(2))
+                            gpu_name = match.group(3).strip()
+                        else:
+                            gpu_id = int(match.group(1))
+                            gpu_name = match.group(2).strip()
                         if not any(g['id'] == gpu_id for g in self.wizard_found_gpus):
                             self.wizard_found_gpus.append({'id': gpu_id, 'name': gpu_name})
                     except (ValueError, IndexError):

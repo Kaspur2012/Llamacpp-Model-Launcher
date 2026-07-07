@@ -1,13 +1,81 @@
 # core/command_builder.py
 
-import shlex
 import re
+import shlex
 import subprocess
 from collections import namedtuple
 
 from .platform_utils import IS_WINDOWS
 
 Parameter = namedtuple('Parameter', ['key', 'value'])
+
+
+def _parse_args(args_str: str) -> list[str]:
+    """
+    Custom argument parser that replaces shlex.split() to avoid backslash mangling.
+
+    shlex.split() on Windows (posix=False) treats \" as an escaped quote, stripping
+    the backslash. This corrupts JSON values like "{\"key\": true}" and also
+    mangles Windows paths with backslashes.
+
+    This parser:
+    - Treats \\ as a literal backslash (preserving Windows paths)
+    - Treats \" as an escaped quote ONLY inside double-quoted strings
+    - Handles single-quoted strings (no escape processing)
+    - Handles unquoted tokens with space separation
+    """
+    tokens = []
+    i = 0
+    length = len(args_str)
+
+    while i < length:
+        # Skip whitespace
+        if args_str[i].isspace():
+            i += 1
+            continue
+
+        if args_str[i] == '"':
+            # Double-quoted string - process escape sequences
+            # Handles both \" (shell-style) and "" (Windows list2cmdline-style)
+            i += 1  # skip opening quote
+            chars = []
+            while i < length:
+                ch = args_str[i]
+                if ch == '\\' and i + 1 < length and args_str[i + 1] == '"':
+                    # Shell-style escaped quote: \"
+                    chars.append('"')
+                    i += 2
+                elif ch == '"' and i + 1 < length and args_str[i + 1] == '"':
+                    # Windows list2cmdline-style escaped quote: ""
+                    chars.append('"')
+                    i += 2
+                elif ch == '"':
+                    # End of quoted string
+                    i += 1
+                    break
+                else:
+                    chars.append(ch)
+                    i += 1
+            tokens.append(''.join(chars))
+        elif args_str[i] == "'":
+            # Single-quoted string - no escape processing
+            i += 1  # skip opening quote
+            chars = []
+            while i < length and args_str[i] != "'":
+                chars.append(args_str[i])
+                i += 1
+            if i < length:
+                i += 1  # skip closing quote
+            tokens.append(''.join(chars))
+        else:
+            # Unquoted token
+            chars = []
+            while i < length and not args_str[i].isspace():
+                chars.append(args_str[i])
+                i += 1
+            tokens.append(''.join(chars))
+
+    return tokens
 
 
 class CommandBuilder:
@@ -26,7 +94,7 @@ class CommandBuilder:
         prefix_str, suffix_str = "", command_str
 
         # Special handling for Windows paths in GGUF files which may contain spaces
-        # and break shlex parsing if not handled separately.
+        # and break parsing if not handled separately.
         path_matches = list(re.finditer(r'\S+\.gguf', command_str, re.IGNORECASE))
         if path_matches:
             # Find the last match, which is most likely the main model path
@@ -35,17 +103,8 @@ class CommandBuilder:
             prefix_str = command_str[:split_point]
             suffix_str = command_str[split_point:]
 
-        try:
-            # Use windows-style parsing on Windows for unquoted paths, POSIX on macOS/Linux
-            prefix_tokens = shlex.split(prefix_str, posix=not IS_WINDOWS)
-        except ValueError:
-            prefix_tokens = prefix_str.split()  # Fallback for safety
-
-        try:
-            # Use platform-appropriate parsing to preserve backslashes in paths on Windows
-            suffix_tokens = shlex.split(suffix_str, posix=not IS_WINDOWS)
-        except ValueError:
-            suffix_tokens = suffix_str.split()  # Fallback
+        prefix_tokens = _parse_args(prefix_str)
+        suffix_tokens = _parse_args(suffix_str)
 
         all_tokens = prefix_tokens + suffix_tokens
         if not all_tokens:

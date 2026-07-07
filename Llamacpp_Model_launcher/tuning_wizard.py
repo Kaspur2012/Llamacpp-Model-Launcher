@@ -191,7 +191,7 @@ class TuningWizard:
             ])
 
         yield {'action': 'log', 'message': "\n[PHASE 1] Extracting Model Metadata..."}
-        extraction_params = {'--no-warmup': None, '-ngl': '1', '-c': '4096'}
+        extraction_params = {'--no-warmup': None, '-ngl': '1', '-c': '4096', '-lv': '4'}
         yield {'action': 'update_params', 'params': extraction_params}
 
         metadata_timeout = self._calculate_dynamic_timeout('metadata')
@@ -241,7 +241,7 @@ class TuningWizard:
         yield {'action': 'log', 'message': "\n[PHASE 2] Probing KV Cache Cost..."}
         probe_ngl = self._calculate_safe_probe_ngl()
         # Force f16 to get a clean baseline for the dynamic UI logic
-        params_probe = {'-ngl': probe_ngl, '-c': '4096', '-ctk': 'f16', '-ctv': 'f16'}
+        params_probe = {'-ngl': probe_ngl, '-c': '4096', '-ctk': 'f16', '-ctv': 'f16', '-lv': '4'}
         yield {'action': 'update_params', 'params': params_probe}
         timeout = self._calculate_dynamic_timeout('probe')
         yield {'action': 'probe_kv_stats', 'timeout_ms': timeout}
