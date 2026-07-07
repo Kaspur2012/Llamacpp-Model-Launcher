@@ -286,6 +286,8 @@ You can create your own model_file.txt from scratch or save the model_file_examp
     *   **Refactored `_browse_file`**: Now accepts custom file type filters for flexible reuse
     *   **Added `.idea/` to `.gitignore`** (PyCharm IDE config)
     *   **Initialized `CHANGELOG.md`**
+    
+    > 🤖 All changes implemented by [pi](https://github.com/earendil-works/pi-coding-agent) with Qwen 3.6 27B
 
 *   04/03/2026 - 
     * ## Merged PR from NeshaLe for Add macOS Apple Silicon support, summary below, Thank You NeshaLe: 

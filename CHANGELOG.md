@@ -15,6 +15,8 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Added `.idea/` to `.gitignore` (PyCharm IDE config)
 
+> 🤖 All changes implemented by [pi](https://github.com/earendil-works/pi-coding-agent) with Qwen 3.6 27B
+
 ## [0.1.0] - 2026-04-03
 
 ### Added
