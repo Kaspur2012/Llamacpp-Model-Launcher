@@ -10,6 +10,7 @@ class ModelManager:
     def __init__(self, models_file_path):
         self.models_file_path = models_file_path
         self.models = OrderedDict()
+        self.model_env_vars = OrderedDict()  # model_name -> env_vars string
 
     def set_models_file(self, file_path):
         """Updates the path to the models file."""
@@ -34,6 +35,7 @@ class ModelManager:
 
         grouped_models = defaultdict(list)
         current_model_name = ""
+        self._model_env_vars = {}  # temp storage during parsing
 
         for i, line in enumerate(lines):
             line = line.strip()
@@ -42,11 +44,15 @@ class ModelManager:
 
             # A line is considered a model name if it's not a command
             is_command = line.lower().startswith('llama-server')
+            is_env_line = line.lower().startswith('env:')
 
-            if not is_command:
+            if not is_command and not is_env_line:
                 # And the next line *is* a command
                 if (i + 1 < len(lines)) and lines[i + 1].strip().lower().startswith('llama-server'):
                     current_model_name = line
+            elif is_env_line and current_model_name:
+                # Capture env vars line (line 3: env:KEY=value)
+                self._model_env_vars[current_model_name] = line[4:].strip()  # strip 'env:' prefix
             else:  # It is a command line
                 if current_model_name:
                     grouped_models[current_model_name].append(line)
@@ -64,7 +70,16 @@ class ModelManager:
 
         # Sort by name and store in an OrderedDict
         self.models = OrderedDict(sorted(temp_models.items()))
+        # Build env_vars dict (only for entries that had one)
+        self.model_env_vars = OrderedDict(
+            (name, self._model_env_vars.get(name, ""))
+            for name in self.models
+        )
         return self.models
+
+    def _get_model_env_vars(self):
+        """Returns a copy of the current env vars dict."""
+        return dict(self.model_env_vars)
 
     def save_model(self, old_name, new_name, new_command, is_new):
         """
@@ -87,6 +102,7 @@ class ModelManager:
             return False, f"A model named '{new_name}' already exists."
 
         if is_new:
+            env_vars_text = getattr(self, 'env_vars_to_save', '')
             try:
                 # --- FIX: Changed file mode from 'a' to 'a+' to allow reading ---
                 with open(self.models_file_path, 'a+', encoding='utf-8') as f:
@@ -96,6 +112,8 @@ class ModelManager:
                         if f.read(1) != '\n':
                             f.write('\n')
                     f.write(f"\n{new_name}\n{new_command}\n")
+                    if env_vars_text:
+                        f.write(f"env:{env_vars_text}\n")
                 return True, f"New model '{new_name}' saved."
             except Exception as e:
                 return False, f"Failed to save new model to file:\n{e}"
@@ -104,16 +122,33 @@ class ModelManager:
                 with open(self.models_file_path, 'r', encoding='utf-8') as f:
                     lines = f.readlines()
 
+                env_vars_text = getattr(self, 'env_vars_to_save', '')
                 found = False
+                env_line_idx = None
                 for i, line in enumerate(lines):
-                    if line.strip() == old_name:
+                    stripped = line.strip()
+                    if stripped == old_name:
                         lines[i] = new_name + '\n'
                         lines[i + 1] = new_command + '\n'
                         found = True
+                        # Check if there's an existing env: line after the command
+                        if i + 2 < len(lines) and lines[i + 2].strip().lower().startswith('env:'):
+                            env_line_idx = i + 2
                         break
 
                 if not found:
                     return False, f"Could not find original model '{old_name}' to update."
+
+                # Update or add env vars line
+                if env_vars_text:
+                    if env_line_idx is not None:
+                        lines[env_line_idx] = f"env:{env_vars_text}\n"
+                    else:
+                        # Insert after command line
+                        insert_idx = lines.index(new_command + '\n') + 1
+                        lines.insert(insert_idx, f"env:{env_vars_text}\n")
+                elif env_line_idx is not None:
+                    lines[env_line_idx] = ''  # Clear env line
 
                 with open(self.models_file_path, 'w', encoding='utf-8') as f:
                     f.writelines(lines)

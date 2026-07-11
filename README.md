@@ -279,6 +279,11 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 ##   Change Log
 
+*   07/11/2026 -
+    *   **Added optional Environment Variables field** — discovered I can load the 27B model on my 3090 and offload mmproj to my 2070 instead of CPU for some boost reading image. optional.
+    
+    > 🤖 Created/pushed with pi + Qwen 3.6 27B UD Q5K XL
+
 *   07/07/2026 -
     *   **llama.cpp b9870 compatibility — Tuning Wizard log parsing fix**:
         *   **Root cause**: llama.cpp build 9870 hides critical model metadata (layer count, context length, GPU info, KV cache stats) at default verbosity (`-lv 3`). Trace verbosity (`-lv 4`) is now required.

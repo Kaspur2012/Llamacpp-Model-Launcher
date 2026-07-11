@@ -2,7 +2,8 @@
 
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
                              QScrollArea, QFormLayout, QFrame, QPushButton, QCheckBox,
-                             QMessageBox, QFileDialog)
+                             QMessageBox, QFileDialog, QTextEdit)
+from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt, pyqtSignal
 from Llamacpp_Model_launcher.core.command_builder import Parameter
 
@@ -35,6 +36,32 @@ class RightPanel(QWidget):
         name_layout.addWidget(self.model_name_label)
         name_layout.addWidget(self.model_name_input)
         layout.addWidget(name_frame)
+
+        # Environment Variables Editor
+        env_frame = QFrame()
+        env_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        env_frame.setStyleSheet("QFrame { background-color: #2D323B; border: 1px solid #40454E; border-radius: 4px; }")
+        env_layout = QVBoxLayout(env_frame)
+        env_layout.setContentsMargins(8, 6, 8, 6)
+        env_layout.setSpacing(4)
+        env_title = QLabel("Environment Variables")
+        env_title.setStyleSheet("font-weight: bold; color: #D1D1D1; font-size: 10pt; background: transparent;")
+        env_hint = QLabel('One per line: KEY=value  (e.g., MTMD_BACKEND_DEVICE=cuda1) — do not include "set"')
+        env_hint.setStyleSheet("color: #808080; font-size: 8pt; background: transparent;")
+        self.env_vars_input = QTextEdit()
+        self.env_vars_input.setPlaceholderText("MTMD_BACKEND_DEVICE=cuda1")
+        self.env_vars_input.setMaximumHeight(60)
+        self.env_vars_input.setFont(QFont('Menlo', 9))
+        self.env_vars_input.setStyleSheet(
+            "QTextEdit { background-color: #252930; color: #E0E0E0; border: 1px solid #505660; "
+            "border-radius: 4px; padding: 4px; font-size: 9pt; } "
+            "QTextEdit:focus { border: 1px solid #4D90E2; }"
+        )
+        self.env_vars_input.textChanged.connect(self._mark_as_dirty)
+        env_layout.addWidget(env_title)
+        env_layout.addWidget(env_hint)
+        env_layout.addWidget(self.env_vars_input)
+        layout.addWidget(env_frame)
 
         title = QLabel("Parameter Editor")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -91,10 +118,11 @@ class RightPanel(QWidget):
         button_layout.addWidget(save_button)
         layout.addLayout(button_layout)
 
-    def populate(self, command_parts: list[Parameter], model_name: str):
+    def populate(self, command_parts: list[Parameter], model_name: str, env_vars: str = ""):
         """Clears and fills the editor with a new set of parameters."""
         # Block signals on the container widget to prevent textChanged from firing
         self.param_widget.blockSignals(True)
+        self.env_vars_input.blockSignals(True)
         try:
             while self.param_layout.rowCount() > 0:
                 self.param_layout.removeRow(0)
@@ -103,12 +131,15 @@ class RightPanel(QWidget):
             self.model_name_input.setText(model_name)
             self.model_name_input.blockSignals(False)
 
+            self.env_vars_input.setPlainText(env_vars)
+
             if not command_parts: return
             for param in command_parts:
                 self.add_parameter_row(param.key, param.value)
         finally:
             # IMPORTANT: Unblock signals after setup is complete
             self.param_widget.blockSignals(False)
+            self.env_vars_input.blockSignals(False)
 
         self.clear_dirty_state()
 
@@ -222,6 +253,16 @@ class RightPanel(QWidget):
     def get_model_name(self) -> str:
         """Returns the current text from the model name input field."""
         return self.model_name_input.text().strip().replace(' (*)', '')
+
+    def get_env_vars(self) -> str:
+        """Returns the raw environment variables text."""
+        return self.env_vars_input.toPlainText().strip()
+
+    def set_env_vars(self, text: str):
+        """Sets the environment variables text."""
+        self.env_vars_input.blockSignals(True)
+        self.env_vars_input.setPlainText(text)
+        self.env_vars_input.blockSignals(False)
 
     def set_model_name(self, name):
         """Sets the text of the model name input field."""

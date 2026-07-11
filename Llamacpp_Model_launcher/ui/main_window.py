@@ -38,6 +38,7 @@ class MainWindow(QWidget):
         self.is_editing_new_model = False
         self.is_dirty = False
         self.previous_model_index = -1
+        self.current_model_env_vars = ""  # env vars for the currently selected model
 
         self.config_manager = ConfigManager(self.config_file)
         self.model_manager = ModelManager(self.models_file)
@@ -670,9 +671,18 @@ class MainWindow(QWidget):
                 return
         self._reload_editor_for_model(index)
         self.previous_model_index = index
+        # Load env vars for the selected model
+        model_name = self.left_panel.model_dropdown.currentText()
+        env_vars_dict = self.model_manager._get_model_env_vars()
+        self.current_model_env_vars = env_vars_dict.get(model_name, "")
+        self.right_panel.set_env_vars(self.current_model_env_vars)
 
     def _reset_current_model(self):
         self._reload_editor_for_model(self.left_panel.model_dropdown.currentIndex())
+        model_name = self.left_panel.model_dropdown.currentText()
+        env_vars_dict = self.model_manager._get_model_env_vars()
+        self.current_model_env_vars = env_vars_dict.get(model_name, "")
+        self.right_panel.set_env_vars(self.current_model_env_vars)
 
     def add_parameter_from_browser(self, param_data, input_widget):
         value = None
@@ -703,7 +713,8 @@ class MainWindow(QWidget):
             Parameter('--top-k', '40'), Parameter('--top-p', '0.95'), Parameter('--min-p', '0.05'),
         ]
         self.left_panel.set_dropdown_index(-1)
-        self.right_panel.populate(default_params, new_name)
+        self.right_panel.populate(default_params, new_name, "")
+        self.current_model_env_vars = ""
         QMessageBox.information(self, "Pro Tip",
                                 "For best output quality, find recommended sampling parameters from the model's creator.")
 
@@ -726,14 +737,17 @@ class MainWindow(QWidget):
         if not new_name: QMessageBox.warning(self, "Input Error", "Model name cannot be empty."); return
         params_from_editor = self.right_panel.get_parameters()
         new_command = self.command_builder.build(params_from_editor)
+        env_vars_text = self.right_panel.get_env_vars()
         old_name = ""
         if not self.is_editing_new_model and self.previous_model_index != -1:
             old_name = self.left_panel.model_dropdown.itemText(self.previous_model_index)
+        self.model_manager.env_vars_to_save = env_vars_text
         success, message = self.model_manager.save_model(old_name, new_name, new_command, self.is_editing_new_model)
         if success:
             QMessageBox.information(self, "Success", message)
             self.is_editing_new_model = False
             self.right_panel.clear_dirty_state()
+            self.current_model_env_vars = env_vars_text
             current_selection = self.populate_model_dropdown()
             if new_name in current_selection: self.left_panel.model_dropdown.setCurrentText(new_name)
             self.previous_model_index = self.left_panel.model_dropdown.currentIndex()
@@ -754,7 +768,8 @@ class MainWindow(QWidget):
         self.is_editing_new_model = True
         self.left_panel.set_dropdown_index(-1)
         current_params = self.right_panel.get_parameters()
-        self.right_panel.populate(current_params, new_name)
+        self.right_panel.populate(current_params, new_name, self.current_model_env_vars)
+        # env vars carried over automatically
 
     def update_auto_open_visibility(self):
         is_webui_enabled = self.left_panel.webui_checkbox.isChecked()
@@ -794,6 +809,8 @@ class MainWindow(QWidget):
             self.model_selected(0)
         else:
             self.model_selected(-1)
+            self.current_model_env_vars = ""
+            self.right_panel.set_env_vars("")
         return model_names
 
     def load_config(self):
@@ -860,7 +877,19 @@ class MainWindow(QWidget):
             try:
                 temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.bat', delete=False, encoding='utf-8')
                 self.temp_batch_file = temp_file.name
-                temp_file.write(f'@echo off\n{command_str}')
+                temp_file.write('@echo off\n')
+                # Inject environment variables (e.g., MTMD_BACKEND_DEVICE=cuda1)
+                env_vars_text = self.right_panel.get_env_vars()
+                if env_vars_text:
+                    for env_line in env_vars_text.split('\n'):
+                        env_line = env_line.strip()
+                        if not env_line or '=' not in env_line:
+                            continue
+                        # Strip leading 'set ' if user already typed it
+                        if env_line.lower().startswith('set '):
+                            env_line = env_line[4:].strip()
+                        temp_file.write(f'set {env_line}\n')
+                temp_file.write(command_str)
                 temp_file.close()
             except Exception as e:
                 QMessageBox.critical(self, "File Error", f"Could not create temp batch file:\n{e}")
