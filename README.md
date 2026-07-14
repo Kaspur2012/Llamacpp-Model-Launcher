@@ -279,6 +279,22 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 ##   Change Log
 
+*   07/14/2026 -
+    *   **Per-model Llama.cpp directory override** — associate a specific llama.cpp build (CUDA, Vulkan, etc.) with each model, so switching models automatically uses the right build without manual directory changes
+        *   New `llamacppdir:` line in `models.txt` (same pattern as `env:`)
+        *   New "Llama.cpp Directory" field in the Right Panel with **Browse...** and **× clear** buttons
+        *   Falls back to global directory from `config.ini` if not set per-model
+        *   Carried over on duplicate, cleared on new model
+    *   **First-run welcome dialog** — on startup with no models file configured, the app offers:
+        *   **[Create Template]** — auto-creates a ready-to-edit `models.txt` in your Documents folder with real-world examples (including `llamacppdir:` and `env:` usage)
+        *   **[Browse...]** — pick your own existing models file
+        *   If template already exists: offers **Open Existing** / **Overwrite** / **Browse**
+    *   **Missing file detection** — if the configured models file is deleted/moved, the app prompts to browse to it on startup
+    *   **Config API improvements** — added `get_config()` and `set_config()` methods for individual key access
+    *   **Path labels update on startup** — "Models File" label now correctly reflects the resolved path after template creation
+    
+    > 🤖 All changes implemented by [pi](https://github.com/earendil-works/pi-coding-agent) with Qwen 3.6 27B
+
 *   07/11/2026 -
     *   **Added optional Environment Variables field** — discovered I can load the 27B model on my 3090 and offload mmproj to my 2070 instead of CPU for some boost reading image. optional.
     

@@ -39,6 +39,7 @@ class MainWindow(QWidget):
         self.is_dirty = False
         self.previous_model_index = -1
         self.current_model_env_vars = ""  # env vars for the currently selected model
+        self.current_model_llamacppdir = ""  # per-model llamacpp directory override
 
         self.config_manager = ConfigManager(self.config_file)
         self.model_manager = ModelManager(self.models_file)
@@ -119,7 +120,12 @@ class MainWindow(QWidget):
         self._connect_signals()
 
         self.load_config()
-        self.populate_model_dropdown()
+        resolved_models_file = self._handle_startup_models_file()
+        if resolved_models_file:
+            self.models_file = resolved_models_file
+        self.populate_model_dropdown(resolved_models_file)
+        if resolved_models_file:
+            self.update_path_labels()
 
     def _init_ui(self):
         self.setWindowTitle('Llama.cpp Model Launcher')
@@ -161,6 +167,7 @@ class MainWindow(QWidget):
         self.right_panel.duplicate_clicked.connect(self.duplicate_model)
         self.right_panel.reset_clicked.connect(self._reset_current_model)
         self.right_panel.dirty_state_changed.connect(lambda is_dirty: setattr(self, 'is_dirty', is_dirty))
+        self.right_panel.llamacpp_dir_changed.connect(self._on_llamacpp_dir_changed)
 
     def _cancel_tuning_wizard(self):
         self.left_panel.append_output("\n[WIZARD] Tuning process cancelled by user.")
@@ -654,10 +661,13 @@ class MainWindow(QWidget):
         if not current_name: self.right_panel.populate([], ""); return
         command_str = self.model_manager.models.get(current_name, "")
         command_parts = self.command_builder.parse(command_str)
-        self.right_panel.populate(command_parts, current_name)
+        llamacpp_dirs = self.model_manager._get_model_llamacppdirs()
+        model_dir = llamacpp_dirs.get(current_name, "")
+        self.right_panel.populate(command_parts, current_name, self.current_model_env_vars, model_dir)
 
     def model_selected(self, index):
         self.analysis_results = None
+        self.current_model_llamacppdir = ""
         if index == -1 or index == self.previous_model_index: return
         if self.is_dirty:
             reply = QMessageBox.question(self, 'Unsaved Changes', "Save unsaved changes before switching?",
@@ -676,6 +686,13 @@ class MainWindow(QWidget):
         env_vars_dict = self.model_manager._get_model_env_vars()
         self.current_model_env_vars = env_vars_dict.get(model_name, "")
         self.right_panel.set_env_vars(self.current_model_env_vars)
+        llamacpp_dirs = self.model_manager._get_model_llamacppdirs()
+        self.current_model_llamacppdir = llamacpp_dirs.get(model_name, "")
+        self.right_panel.set_llamacpp_dir(self.current_model_llamacppdir)
+
+    def _on_llamacpp_dir_changed(self, new_dir):
+        """Track the per-model directory as the user types/browses."""
+        self.current_model_llamacppdir = new_dir
 
     def _reset_current_model(self):
         self._reload_editor_for_model(self.left_panel.model_dropdown.currentIndex())
@@ -683,6 +700,9 @@ class MainWindow(QWidget):
         env_vars_dict = self.model_manager._get_model_env_vars()
         self.current_model_env_vars = env_vars_dict.get(model_name, "")
         self.right_panel.set_env_vars(self.current_model_env_vars)
+        llamacpp_dirs = self.model_manager._get_model_llamacppdirs()
+        self.current_model_llamacppdir = llamacpp_dirs.get(model_name, "")
+        self.right_panel.set_llamacpp_dir(self.current_model_llamacppdir)
 
     def add_parameter_from_browser(self, param_data, input_widget):
         value = None
@@ -713,7 +733,7 @@ class MainWindow(QWidget):
             Parameter('--top-k', '40'), Parameter('--top-p', '0.95'), Parameter('--min-p', '0.05'),
         ]
         self.left_panel.set_dropdown_index(-1)
-        self.right_panel.populate(default_params, new_name, "")
+        self.right_panel.populate(default_params, new_name, "", "")
         self.current_model_env_vars = ""
         QMessageBox.information(self, "Pro Tip",
                                 "For best output quality, find recommended sampling parameters from the model's creator.")
@@ -742,6 +762,7 @@ class MainWindow(QWidget):
         if not self.is_editing_new_model and self.previous_model_index != -1:
             old_name = self.left_panel.model_dropdown.itemText(self.previous_model_index)
         self.model_manager.env_vars_to_save = env_vars_text
+        self.model_manager.llamacppdir_to_save = self.right_panel.get_llamacpp_dir()
         success, message = self.model_manager.save_model(old_name, new_name, new_command, self.is_editing_new_model)
         if success:
             QMessageBox.information(self, "Success", message)
@@ -768,7 +789,7 @@ class MainWindow(QWidget):
         self.is_editing_new_model = True
         self.left_panel.set_dropdown_index(-1)
         current_params = self.right_panel.get_parameters()
-        self.right_panel.populate(current_params, new_name, self.current_model_env_vars)
+        self.right_panel.populate(current_params, new_name, self.current_model_env_vars, self.current_model_llamacppdir)
         # env vars carried over automatically
 
     def update_auto_open_visibility(self):
@@ -798,8 +819,101 @@ class MainWindow(QWidget):
             self.populate_model_dropdown();
             self.update_path_labels()
 
-    def populate_model_dropdown(self):
+    def _handle_startup_models_file(self):
+        """Handle the case where no models file is configured or found.
+        Returns the resolved models file path, or None to use config as-is."""
+        models_file = self.config_manager.get_config('modelsfile')
+
+        if not models_file:
+            return self._show_first_run_dialog()
+        elif not os.path.exists(models_file):
+            return self._show_missing_file_dialog(models_file)
+
+        return None
+
+    def _show_first_run_dialog(self):
+        """Dialog shown on first run when no models file is configured."""
+        default_path = os.path.join(os.path.expanduser('~'), 'Documents', 'models.txt')
+        template_exists = os.path.exists(default_path)
+
+        if template_exists:
+            msg = QMessageBox(self)
+            msg.setWindowTitle('No Models File Configured')
+            msg.setText(f'A models file already exists:\n{default_path}')
+            msg.setInformativeText('Would you like to open it or create a new template?')
+            open_btn = msg.addButton('Open Existing', QMessageBox.ButtonRole.AcceptRole)
+            overwrite_btn = msg.addButton('Create Template', QMessageBox.ButtonRole.ActionRole)
+            browse_btn = msg.addButton('Browse...', QMessageBox.ButtonRole.ActionRole)
+            msg.setDefaultButton(open_btn)
+            msg.exec()
+            clicked = msg.clickedButton()
+            if clicked == open_btn:
+                self.config_manager.set_config('modelsfile', default_path)
+                return default_path
+            elif clicked == overwrite_btn:
+                return self._create_and_set_template(default_path)
+            elif clicked == browse_btn:
+                return self._browse_and_set_models_file()
+        else:
+            msg = QMessageBox(self)
+            msg.setWindowTitle('Welcome to Llama.cpp Model Launcher')
+            msg.setText('No models file configured yet.')
+            msg.setInformativeText('Would you like to create a default template or browse to your own file?')
+            create_btn = msg.addButton('Create Template', QMessageBox.ButtonRole.AcceptRole)
+            browse_btn = msg.addButton('Browse...', QMessageBox.ButtonRole.ActionRole)
+            msg.setDefaultButton(create_btn)
+            msg.exec()
+            clicked = msg.clickedButton()
+            if clicked == create_btn:
+                return self._create_and_set_template(default_path)
+            elif clicked == browse_btn:
+                return self._browse_and_set_models_file()
+        return None
+
+    def _show_missing_file_dialog(self, missing_path):
+        """Dialog shown when the configured models file no longer exists."""
+        msg = QMessageBox(self)
+        msg.setWindowTitle('Models File Not Found')
+        msg.setText(f'The models file was not found:\n{missing_path}')
+        msg.setInformativeText('Please browse to your models file.')
+        msg.addButton('Browse...', QMessageBox.ButtonRole.AcceptRole)
+        msg.addButton('Cancel', QMessageBox.ButtonRole.RejectRole)
+        msg.setDefaultButton(0)
+        result = msg.exec()
+        if result == QMessageBox.StandardButton(0):
+            return self._browse_and_set_models_file()
+        return None
+
+    def _create_and_set_template(self, path):
+        """Create a default template file and set it as the models file.
+        Returns the created path, or None on failure."""
+        directory = os.path.dirname(path)
+        created_path = ModelManager.create_default_template(directory)
+        if created_path:
+            self.config_manager.set_config('modelsfile', created_path)
+            return created_path
+        else:
+            QMessageBox.warning(self, 'Error', f'Could not create template file:\n{path}')
+            return None
+
+    def _browse_and_set_models_file(self):
+        """Let the user browse to a models file and set it in config.
+        Returns the selected path, or None if cancelled."""
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, 'Select Models File', '', 'Text Files (*.txt);;All Files (*)'
+        )
+        if filepath:
+            self.config_manager.set_config('modelsfile', filepath)
+            return filepath
+        return None
+
+    def populate_model_dropdown(self, models_file=None):
         self.previous_model_index = -1
+        if models_file is None:
+            models_file = self.config_manager.get_config('modelsfile')
+        if not models_file or not os.path.exists(models_file):
+            return
+        self.model_manager.models_file_path = models_file
         models = self.model_manager.load_models()
         model_names = list(models.keys())
         self.left_panel.populate_dropdown(model_names)
@@ -852,7 +966,9 @@ class MainWindow(QWidget):
         self.detected_cpu_usage_mib = 0.0
         self.detected_gpu_usage_mib = {}
 
-        if not self.llamacpp_dir: QMessageBox.warning(self, "Warning", "Set the Llama.cpp directory first."); return
+        # Use per-model directory if set, otherwise fall back to global
+        effective_dir = self.right_panel.get_llamacpp_dir() or self.llamacpp_dir
+        if not effective_dir: QMessageBox.warning(self, "Warning", "Set the Llama.cpp directory first."); return
         params_from_editor = self.right_panel.get_parameters()
         command_str = self.command_builder.build(params_from_editor)
         if not command_str: QMessageBox.warning(self, "Warning", "Command is empty."); return
@@ -860,7 +976,7 @@ class MainWindow(QWidget):
         # --- FIX: Reset KV capture list for new run ---
         self.captured_kv_entries = []
 
-        log_msg = f"Working Dir: {self.llamacpp_dir}\nExecuting Command: {command_str}\n\n" + "=" * 80 + "\n"
+        log_msg = f"Working Dir: {effective_dir}\nExecuting Command: {command_str}\n\n" + "=" * 80 + "\n"
         if not self.wizard_generator: self.left_panel.clear_output();
         self.left_panel.append_output(log_msg)
         print(f"\n[DIAGNOSTICS] LAUNCHING SERVER\n[DIAGNOSTICS] > {command_str}\n")
@@ -872,7 +988,7 @@ class MainWindow(QWidget):
         self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.process.readyReadStandardOutput.connect(self.handle_stdout)
         self.process.finished.connect(self.process_finished)
-        self.process.setWorkingDirectory(self.llamacpp_dir)
+        self.process.setWorkingDirectory(effective_dir)
         if IS_WINDOWS:
             try:
                 temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.bat', delete=False, encoding='utf-8')

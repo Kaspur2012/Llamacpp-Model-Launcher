@@ -1,0 +1,4 @@
+pycharm terminal
+pyinstaller --onefile --windowed --icon=C:\Users\Anhtien\Pictures\llamacpp.ico C:\Users\Anhtien\PycharmProjects\Online_research\Llamacpp_Model_launcher\main.py
+
+pyinstaller --onefile --windowed --icon=C:\Users\Anhtien\Pictures\llamacpp.ico run_app.py

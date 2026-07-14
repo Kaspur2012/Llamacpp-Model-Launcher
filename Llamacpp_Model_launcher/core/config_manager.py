@@ -43,3 +43,29 @@ class ConfigManager:
         config['Paths'] = {'LlamaCppDir': llamacpp_dir, 'ModelsFile': models_file}
         with open(self.config_file, 'w') as cf:
             config.write(cf)
+
+    def get_config(self, key):
+        """Get a single config value by key ('llamacppdir' or 'modelsfile')."""
+        config = configparser.ConfigParser()
+        if os.path.exists(self.config_file):
+            config.read(self.config_file)
+            if 'Paths' in config:
+                if key.lower() == 'llamacppdir':
+                    return config['Paths'].get('LlamaCppDir', '')
+                elif key.lower() == 'modelsfile':
+                    return config['Paths'].get('ModelsFile', '')
+        return ''
+
+    def set_config(self, key, value):
+        """Set a single config value by key ('llamacppdir' or 'modelsfile')."""
+        config = configparser.ConfigParser()
+        if os.path.exists(self.config_file):
+            config.read(self.config_file)
+        if 'Paths' not in config:
+            config['Paths'] = {}
+        if key.lower() == 'llamacppdir':
+            config['Paths']['LlamaCppDir'] = value
+        elif key.lower() == 'modelsfile':
+            config['Paths']['ModelsFile'] = value
+        with open(self.config_file, 'w') as cf:
+            config.write(cf)

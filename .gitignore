@@ -18,3 +18,8 @@ Llamacpp_Model_launcher/ui/config.ini
 
 # IDE
 .idea/
+
+# PyInstaller
+build/
+dist/*.exe
+*.spec

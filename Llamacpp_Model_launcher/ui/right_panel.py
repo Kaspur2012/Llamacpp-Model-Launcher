@@ -17,6 +17,7 @@ class RightPanel(QWidget):
     duplicate_clicked = pyqtSignal()
     reset_clicked = pyqtSignal()
     dirty_state_changed = pyqtSignal(bool)
+    llamacpp_dir_changed = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -62,6 +63,48 @@ class RightPanel(QWidget):
         env_layout.addWidget(env_hint)
         env_layout.addWidget(self.env_vars_input)
         layout.addWidget(env_frame)
+
+        # Llama.cpp Directory Override
+        dir_frame = QFrame()
+        dir_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        dir_frame.setStyleSheet("QFrame { background-color: #2D323B; border: 1px solid #40454E; border-radius: 4px; }")
+        dir_layout = QVBoxLayout(dir_frame)
+        dir_layout.setContentsMargins(8, 6, 8, 6)
+        dir_layout.setSpacing(4)
+        dir_title = QLabel("Llama.cpp Directory (per-model)")
+        dir_title.setStyleSheet("font-weight: bold; color: #D1D1D1; font-size: 10pt; background: transparent;")
+        dir_hint = QLabel('Override the global Llama.cpp directory for this model (e.g., CUDA vs Vulkan build)')
+        dir_hint.setStyleSheet("color: #808080; font-size: 8pt; background: transparent;")
+        dir_hint.setWordWrap(True)
+        dir_input_layout = QHBoxLayout()
+        self.llamacpp_dir_input = QLineEdit()
+        self.llamacpp_dir_input.setPlaceholderText("Leave empty to use global directory from config.ini")
+        self.llamacpp_dir_input.setFont(QFont('Menlo', 9))
+        self.llamacpp_dir_input.setStyleSheet(
+            "QLineEdit { background-color: #252930; color: #E0E0E0; border: 1px solid #505660; "
+            "border-radius: 4px; padding: 4px; font-size: 9pt; } "
+            "QLineEdit:focus { border: 1px solid #4D90E2; }"
+        )
+        self.llamacpp_dir_input.textChanged.connect(self._mark_as_dirty)
+        self.llamacpp_dir_input.textChanged.connect(self.llamacpp_dir_changed)
+        dir_input_layout.addWidget(self.llamacpp_dir_input, 1)
+        dir_browse_button = QPushButton("Browse...")
+        dir_browse_button.clicked.connect(lambda: self._browse_directory())
+        dir_input_layout.addWidget(dir_browse_button)
+        dir_clear_button = QPushButton("\u00d7")
+        dir_clear_button.setFixedWidth(24)
+        dir_clear_button.setToolTip("Clear per-model directory (use global)")
+        dir_clear_button.setStyleSheet(
+            "QPushButton { background-color: #4A4A5A; color: #CCC; border: 1px solid #555; "
+            "border-radius: 3px; font-size: 10pt; font-weight: bold; padding: 2px 4px; } "
+            "QPushButton:hover { background-color: #5A5A6A; color: white; }"
+        )
+        dir_clear_button.clicked.connect(lambda: self._clear_llamacpp_dir())
+        dir_input_layout.addWidget(dir_clear_button)
+        dir_layout.addWidget(dir_title)
+        dir_layout.addWidget(dir_hint)
+        dir_layout.addLayout(dir_input_layout)
+        layout.addWidget(dir_frame)
 
         title = QLabel("Parameter Editor")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -118,7 +161,7 @@ class RightPanel(QWidget):
         button_layout.addWidget(save_button)
         layout.addLayout(button_layout)
 
-    def populate(self, command_parts: list[Parameter], model_name: str, env_vars: str = ""):
+    def populate(self, command_parts: list[Parameter], model_name: str, env_vars: str = "", llamacpp_dir: str = ""):
         """Clears and fills the editor with a new set of parameters."""
         # Block signals on the container widget to prevent textChanged from firing
         self.param_widget.blockSignals(True)
@@ -132,6 +175,10 @@ class RightPanel(QWidget):
             self.model_name_input.blockSignals(False)
 
             self.env_vars_input.setPlainText(env_vars)
+
+            self.llamacpp_dir_input.blockSignals(True)
+            self.llamacpp_dir_input.setText(llamacpp_dir)
+            self.llamacpp_dir_input.blockSignals(False)
 
             if not command_parts: return
             for param in command_parts:
@@ -263,6 +310,26 @@ class RightPanel(QWidget):
         self.env_vars_input.blockSignals(True)
         self.env_vars_input.setPlainText(text)
         self.env_vars_input.blockSignals(False)
+
+    def get_llamacpp_dir(self) -> str:
+        """Returns the per-model Llama.cpp directory path."""
+        return self.llamacpp_dir_input.text().strip()
+
+    def set_llamacpp_dir(self, path: str):
+        """Sets the per-model Llama.cpp directory path."""
+        self.llamacpp_dir_input.blockSignals(True)
+        self.llamacpp_dir_input.setText(path)
+        self.llamacpp_dir_input.blockSignals(False)
+
+    def _browse_directory(self):
+        """Open a directory browser dialog for the Llama.cpp directory."""
+        directory = QFileDialog.getExistingDirectory(self, "Select Llama.cpp Directory")
+        if directory:
+            self.llamacpp_dir_input.setText(directory)
+
+    def _clear_llamacpp_dir(self):
+        """Clear the per-model Llama.cpp directory (fall back to global)."""
+        self.llamacpp_dir_input.clear()
 
     def set_model_name(self, name):
         """Sets the text of the model name input field."""
