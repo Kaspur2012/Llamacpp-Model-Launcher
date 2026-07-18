@@ -259,6 +259,11 @@ class TuningWizard:
         # Update Safety Preference based on UI checkbox
         self.ensure_safe_overhead = user_choices.get('ensure_safe_overhead', True)
 
+        # Update safe overhead values from user input (in MB)
+        self.vram_floor_mb = user_choices.get('vram_floor_mb', 600)
+        self.ram_floor_mb = user_choices.get('ram_floor_mb', 1024)
+        yield {'action': 'log', 'message': f"> Safe overhead: VRAM >= {self.vram_floor_mb}MB, RAM >= {self.ram_floor_mb}MB"}
+
         self.base_params = user_choices.get('selected_optimizations', {})
         yield {'action': 'log',
                'message': f"User settings received. Using base optimizations: {list(self.base_params.keys())}"}
@@ -377,8 +382,9 @@ class TuningWizard:
 
             if live_stats.get('success'):
                 # Define Safety Floors (User requirements)
-                VRAM_FLOOR_GB = 0.6  # 600 MB
-                RAM_FLOOR_GB = 1.0   # 1 GB
+                # Use user-configured values (convert MB to GB)
+                vram_floor_gb = self.vram_floor_mb / 1024.0
+                ram_floor_gb = self.ram_floor_mb / 1024.0
 
                 kv_cost = self.analysis.get('kv_mb_per_token', 0.0)
                 is_q8 = final_params.get('-ctk') == 'q8_0'
@@ -403,8 +409,8 @@ class TuningWizard:
 
                     if lookup_id in vram_info:
                         free_gb = vram_info[lookup_id]['total_gb'] - vram_info[lookup_id]['used_gb']
-                        if free_gb < VRAM_FLOOR_GB:
-                            deficit_mb = (VRAM_FLOOR_GB - free_gb) * 1024
+                        if free_gb < vram_floor_gb:
+                            deficit_mb = (vram_floor_gb - free_gb) * 1024
                             resource_name = f"GPU {primary_id} (Physical {lookup_id}) VRAM"
 
                 elif strategy == 'multi_vram':
@@ -413,8 +419,8 @@ class TuningWizard:
 
                     for gid, info in vram_info.items():
                         free_gb = info['total_gb'] - info['used_gb']
-                        if free_gb < VRAM_FLOOR_GB:
-                            local_deficit = (VRAM_FLOOR_GB - free_gb) * 1024
+                        if free_gb < vram_floor_gb:
+                            local_deficit = (vram_floor_gb - free_gb) * 1024
                             if local_deficit > deficit_mb:
                                 deficit_mb = local_deficit
                                 resource_name = f"GPU {gid} (Physical) VRAM"
@@ -447,7 +453,7 @@ class TuningWizard:
                                         if gid == deficit_physical_id: continue
 
                                         free_gb = info['total_gb'] - info['used_gb']
-                                        surplus_mb = (free_gb - VRAM_FLOOR_GB) * 1024
+                                        surplus_mb = (free_gb - vram_floor_gb) * 1024
 
                                         if surplus_mb > (shift_mb + 50): 
                                             log_id = get_logical_id(gid)
@@ -476,16 +482,16 @@ class TuningWizard:
                     # Check ALL GPUs for VRAM deficit
                     for gid, info in vram_info.items():
                         free_gb = info['total_gb'] - info['used_gb']
-                        if free_gb < VRAM_FLOOR_GB:
-                            local_deficit = (VRAM_FLOOR_GB - free_gb) * 1024
+                        if free_gb < vram_floor_gb:
+                            local_deficit = (vram_floor_gb - free_gb) * 1024
                             if local_deficit > deficit_mb:
                                 deficit_mb = local_deficit
                                 resource_name = f"GPU {gid} VRAM"
                                 vram_danger = True
 
                     # Smart Overflow: Check if we can shift to RAM instead of cutting context
-                    # If VRAM is low but RAM is fine (> 1GB), shift 1 layer/expert.
-                    if vram_danger and ram_free > RAM_FLOOR_GB:
+                    # If VRAM is low but RAM is fine (above configured floor), shift 1 layer/expert.
+                    if vram_danger and ram_free > ram_floor_gb:
                         if '-ncmoe' in final_params:
                             cur = int(final_params['-ncmoe'])
                             final_params['-ncmoe'] = str(cur + 1)
@@ -504,8 +510,8 @@ class TuningWizard:
 
                     # If we didn't shift, check RAM danger
                     if not adjustment_made:
-                        if deficit_mb == 0 and ram_free < RAM_FLOOR_GB:
-                            deficit_mb = (RAM_FLOOR_GB - ram_free) * 1024
+                        if deficit_mb == 0 and ram_free < ram_floor_gb:
+                            deficit_mb = (ram_floor_gb - ram_free) * 1024
                             resource_name = "System RAM"
 
                 

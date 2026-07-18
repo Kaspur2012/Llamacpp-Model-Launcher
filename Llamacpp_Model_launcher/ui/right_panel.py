@@ -198,29 +198,70 @@ class RightPanel(QWidget):
         if path:
             line_edit.setText(path)
 
+    @staticmethod
+    def _is_file_path(value):
+        """Detect if a value looks like a file or directory path.
+        Returns ('file', filter) or ('dir',) or None."""
+        if not value or not isinstance(value, str):
+            return None
+        # Remove surrounding quotes if present
+        clean = value.strip('"\'')
+        # Windows absolute path (e.g., D:\path\to\file)
+        if len(clean) >= 3 and clean[1:3] == ':\\' and clean[0].isalpha():
+            # Check if it looks like a file (has extension) or directory
+            lower = clean.lower()
+            if any(lower.endswith(ext) for ext in ('.gguf', '.ggsuf', '.bin', '.safetensors', '.pth', '.ckpt', '.pt', '.onnx', '.ggml', '.bin', '.wts', '.wts', '.json', '.txt', '.jinja', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.xml', '.html', '.md', '.csv', '.log', '.dat', '.model', '.weights', '.safetensors.index.json')):
+                return ('file', clean)
+            return ('dir',)
+        # Unix absolute path
+        if clean.startswith('/'):
+            lower = clean.lower()
+            if any(lower.endswith(ext) for ext in ('.gguf', '.ggsuf', '.bin', '.safetensors', '.pth', '.ckpt', '.pt', '.onnx', '.ggml', '.json', '.txt', '.jinja', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.xml', '.html', '.md', '.csv', '.log', '.dat', '.model', '.weights')):
+                return ('file', clean)
+            return ('dir',)
+        # Relative path with extension
+        import os
+        _, ext = os.path.splitext(clean)
+        if ext and ext.lower() in ('.gguf', '.ggsuf', '.bin', '.safetensors', '.pth', '.ckpt', '.pt', '.onnx', '.ggml', '.json', '.txt', '.jinja', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.xml', '.html', '.md', '.csv', '.log', '.dat', '.model', '.weights'):
+            return ('file', clean)
+        return None
+
     def add_parameter_row(self, param_key, param_value):
         """Adds a single row to the parameter editor form and connects its signals."""
         field_container = QWidget()
         field_layout = QHBoxLayout(field_container)
         field_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Logic to decide which input widget to create
-        # File path parameters that get a Browse button
-        gguf_params = ("-m", "--model", "-md", "--model-draft", "--mmproj")
-        template_params = ("--chat-template-file",)
+        # Determine if this parameter's value is a file/directory path
+        path_info = None
+        if param_value is not None:
+            path_info = self._is_file_path(param_value)
 
-        if param_key in gguf_params:
+        # Determine file filter based on path extension
+        def get_file_filter(path_value):
+            if not path_value:
+                return "GGUF Files (*.gguf);;All Files (*)"
+            lower = path_value.lower()
+            if lower.endswith('.gguf'):
+                return "GGUF Files (*.gguf);;All Files (*)"
+            elif lower.endswith(('.jinja', '.txt', '.json')):
+                return "Jinja Templates (*.jinja);;Text Files (*.txt *.jinja *.json);;All Files (*)"
+            else:
+                return "All Files (*)"
+
+        if path_info and path_info[0] == 'file':
             input_widget = QLineEdit(param_value)
             browse_button = QPushButton("Browse...")
             browse_button.setProperty("param_type", param_key)
-            browse_button.clicked.connect(lambda _, le=input_widget: self._browse_file(le))
+            file_filter = get_file_filter(path_info[1])
+            browse_button.clicked.connect(lambda _, le=input_widget, f=file_filter: self._browse_file(le, f))
             field_layout.addWidget(input_widget)
             field_layout.addWidget(browse_button)
-        elif param_key in template_params:
+        elif path_info and path_info[0] == 'dir':
             input_widget = QLineEdit(param_value)
             browse_button = QPushButton("Browse...")
-            browse_button.setProperty("param_type", param_key)
-            browse_button.clicked.connect(lambda _, le=input_widget: self._browse_file(le, "Jinja Templates (*.jinja);;Text Files (*.txt *.jinja *.json);;All Files (*)"))
+            browse_button.setToolTip("Browse for directory")
+            browse_button.clicked.connect(lambda _, le=input_widget: self._browse_directory_param(le))
             field_layout.addWidget(input_widget)
             field_layout.addWidget(browse_button)
         elif param_value is None:
@@ -326,6 +367,12 @@ class RightPanel(QWidget):
         directory = QFileDialog.getExistingDirectory(self, "Select Llama.cpp Directory")
         if directory:
             self.llamacpp_dir_input.setText(directory)
+
+    def _browse_directory_param(self, line_edit):
+        """Open a directory browser dialog for a parameter value."""
+        directory = QFileDialog.getExistingDirectory(self, "Select Directory")
+        if directory:
+            line_edit.setText(directory)
 
     def _clear_llamacpp_dir(self):
         """Clear the per-model Llama.cpp directory (fall back to global)."""

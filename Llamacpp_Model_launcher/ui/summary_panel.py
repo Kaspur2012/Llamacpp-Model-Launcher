@@ -1,7 +1,8 @@
 # Llamacpp_Model_launcher/ui/summary_panel.py
 
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame,
-                             QFormLayout, QRadioButton, QCheckBox, QButtonGroup, QSpinBox)
+                             QFormLayout, QRadioButton, QCheckBox, QButtonGroup, QSpinBox, QLineEdit)
+from PyQt6.QtGui import QFont
 from PyQt6.QtCore import pyqtSignal, Qt
 from .styles import PARAMETER_BROWSER_STYLES
 
@@ -185,10 +186,55 @@ class SummaryPanel(QWidget):
         self.maximize_context_checkbox.stateChanged.connect(self._toggle_context_input)
         
         self.safe_overhead_checkbox = QCheckBox("Ensure Safe Resource Overhead")
-        self.safe_overhead_checkbox.setToolTip("After finding max limits, reduces context to ensure 600MB VRAM and 1GB RAM remain free.")
+        self.safe_overhead_checkbox.setToolTip("After finding max limits, reduces context to ensure minimum free resources remain.")
         self.safe_overhead_checkbox.setChecked(True)
         self.safe_overhead_checkbox.setStyleSheet(WIDGET_STYLESHEET)
         layout.addWidget(self.safe_overhead_checkbox)
+
+        # Safe overhead values (indented, enabled/disabled with checkbox)
+        overhead_frame = QFrame()
+        overhead_frame.setStyleSheet("background: transparent;")
+        overhead_layout = QHBoxLayout(overhead_frame)
+        overhead_layout.setContentsMargins(20, 2, 0, 2)
+
+        vram_label = QLabel("Min VRAM (MB):")
+        vram_label.setStyleSheet("color: #AAA; font-size: 9pt; background: transparent;")
+        self.vram_floor_input = QLineEdit("600")
+        self.vram_floor_input.setFixedWidth(70)
+        self.vram_floor_input.setFont(QFont('Menlo', 9))
+        self.vram_floor_input.setStyleSheet(
+            "QLineEdit { background-color: #252930; color: #E0E0E0; border: 1px solid #505660; "
+            "border-radius: 4px; padding: 3px; font-size: 9pt; } "
+            "QLineEdit:focus { border: 1px solid #4D90E2; }"
+        )
+        self.vram_floor_input.setToolTip("Minimum VRAM to keep free (MB)")
+
+        ram_label = QLabel("Min RAM (MB):")
+        ram_label.setStyleSheet("color: #AAA; font-size: 9pt; background: transparent;")
+        self.ram_floor_input = QLineEdit("1024")
+        self.ram_floor_input.setFixedWidth(70)
+        self.ram_floor_input.setFont(QFont('Menlo', 9))
+        self.ram_floor_input.setStyleSheet(
+            "QLineEdit { background-color: #252930; color: #E0E0E0; border: 1px solid #505660; "
+            "border-radius: 4px; padding: 3px; font-size: 9pt; } "
+            "QLineEdit:focus { border: 1px solid #4D90E2; }"
+        )
+        self.ram_floor_input.setToolTip("Minimum RAM to keep free (MB)")
+
+        overhead_layout.addWidget(vram_label)
+        overhead_layout.addWidget(self.vram_floor_input)
+        overhead_layout.addSpacing(12)
+        overhead_layout.addWidget(ram_label)
+        overhead_layout.addWidget(self.ram_floor_input)
+        overhead_layout.addStretch()
+        layout.addWidget(overhead_frame)
+
+        # Toggle visibility based on checkbox
+        self.safe_overhead_checkbox.toggled.connect(lambda checked: self.vram_floor_input.setEnabled(checked))
+        self.safe_overhead_checkbox.toggled.connect(lambda checked: self.ram_floor_input.setEnabled(checked))
+        self.safe_overhead_checkbox.toggled.connect(lambda checked: vram_label.setEnabled(checked))
+        self.safe_overhead_checkbox.toggled.connect(lambda checked: ram_label.setEnabled(checked))
+
         layout.addWidget(self.maximize_context_checkbox)
 
         # --- Target Context Input ---
@@ -392,11 +438,23 @@ class SummaryPanel(QWidget):
         else:
             target_context = self.target_context_spinbox.value()
 
+        # Parse safe overhead values
+        try:
+            vram_floor_mb = int(self.vram_floor_input.text().strip() or '600')
+        except ValueError:
+            vram_floor_mb = 600
+        try:
+            ram_floor_mb = int(self.ram_floor_input.text().strip() or '1024')
+        except ValueError:
+            ram_floor_mb = 1024
+
         choices = {
             'goal': 'performance',
             'offload_strategy': offload_map.get(self.offload_group.checkedId(), 'single_gpu'),
             'maximize_context': self.maximize_context_checkbox.isChecked(),
             'ensure_safe_overhead': self.safe_overhead_checkbox.isChecked(),
+            'vram_floor_mb': vram_floor_mb,
+            'ram_floor_mb': ram_floor_mb,
             'target_context': target_context,
             'primary_gpu_id': selected_gpu_button.property("gpu_id") if selected_gpu_button else 0,
             'selected_optimizations': selected_optimizations
