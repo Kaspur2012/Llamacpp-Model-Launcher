@@ -279,6 +279,19 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 ##   Change Log
 
+*   07/18/2026 -
+    *   **Auto Browse buttons for path parameters** — parameters with file or directory paths now automatically get a **Browse...** button
+        *   Detects Windows paths (`D:\path\to\file`), Unix paths (`/usr/local/bin`), and relative paths with known extensions
+        *   Context-aware file filters (GGUF, JSON, TXT, YAML, etc.) based on file extension
+        *   Non-path parameters remain clean — no unnecessary buttons
+    *   **Configurable safe resource overhead in Tuning Assistant** — safety margins are now user-adjustable instead of hardcoded
+        *   New **Min VRAM (MB)** input (default: `600`) — minimum VRAM kept free during tuning
+        *   New **Min RAM (MB)** input (default: `1024`) — minimum RAM kept free during tuning
+        *   Inputs toggle on/off with the **"Ensure Safe Resource Overhead"** checkbox under *Additional Optimization*
+        *   Allows power users to tighten or relax safety floors based on their system
+
+    > 🤖 All changes implemented by [pi](https://github.com/earendil-works/pi-coding-agent) with Qwen 3.6 27B
+
 *   07/14/2026 -
     *   **Per-model Llama.cpp directory override** — associate a specific llama.cpp build (CUDA, Vulkan, etc.) with each model, so switching models automatically uses the right build without manual directory changes
         *   New `llamacppdir:` line in `models.txt` (same pattern as `env:`)
