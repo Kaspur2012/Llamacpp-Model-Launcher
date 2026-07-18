@@ -290,7 +290,7 @@ You can create your own model_file.txt from scratch or save the model_file_examp
         *   Inputs toggle on/off with the **"Ensure Safe Resource Overhead"** checkbox under *Additional Optimization*
         *   Allows power users to tighten or relax safety floors based on their system
 
-    > 🤖 All changes implemented by [pi](https://github.com/earendil-works/pi-coding-agent) with Qwen 3.6 27B
+    > 🤖 All changes implemented by [pi](https://pi.dev) with Qwen 3.6 27B
 
 *   07/14/2026 -
     *   **Per-model Llama.cpp directory override** — associate a specific llama.cpp build (CUDA, Vulkan, etc.) with each model, so switching models automatically uses the right build without manual directory changes
@@ -306,7 +306,7 @@ You can create your own model_file.txt from scratch or save the model_file_examp
     *   **Config API improvements** — added `get_config()` and `set_config()` methods for individual key access
     *   **Path labels update on startup** — "Models File" label now correctly reflects the resolved path after template creation
     
-    > 🤖 All changes implemented by [pi](https://github.com/earendil-works/pi-coding-agent) with Qwen 3.6 27B
+    > 🤖 All changes implemented by [pi](https://pi.dev) with Qwen 3.6 27B
 
 *   07/11/2026 -
     *   **Added optional Environment Variables field** — discovered I can load the 27B model on my 3090 and offload mmproj to my 2070 instead of CPU for some boost reading image. optional.
@@ -330,7 +330,7 @@ You can create your own model_file.txt from scratch or save the model_file_examp
     *   **Added `.idea/` to `.gitignore`** (PyCharm IDE config)
     *   **Initialized `CHANGELOG.md`**
     
-    > 🤖 All changes implemented by [pi](https://github.com/earendil-works/pi-coding-agent) with Qwen 3.6 27B
+    > 🤖 All changes implemented by [pi](https://pi.dev) with Qwen 3.6 27B
 
 *   04/03/2026 - 
     * ## Merged PR from NeshaLe for Add macOS Apple Silicon support, summary below, Thank You NeshaLe: 
