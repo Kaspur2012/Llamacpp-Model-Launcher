@@ -59,6 +59,8 @@ class TuningWizard:
         current_params = params_to_test.copy()
         last_failing_device = -1
         last_ts_vals = None  # Store previous split for midpoint calculation
+        ping_pong_count = 0
+        max_midpoint_refinements = 8
 
         for attempt in range(max_retries):
             # 1. Update and Test
@@ -96,8 +98,19 @@ class TuningWizard:
                     return {'success': False, 'params': current_params, 'reason': 'oom_no_secondary',
                             'error_details': error_details}
 
-                ts_step = 0.02
+                # Step 3: Adaptive step size based on GPU asymmetry
+                gpus = self.analysis.get('gpus', [])
+                gpu_vram_totals = [g.get('vram', {}).get('total_gb', 0) for g in gpus]
+                if gpu_vram_totals and sum(gpu_vram_totals) > 0:
+                    smaller_gpu_frac = min(gpu_vram_totals) / sum(gpu_vram_totals)
+                    ts_step = max(0.005, min(0.02, smaller_gpu_frac * 0.15))
+                else:
+                    ts_step = 0.02
                 min_split = 0.005
+
+                # Step 1: Diagnostic logging — log -ts values and OOM device every attempt
+                yield {'action': 'log', 'message': f"  > [TS diag] Attempt {attempt+1}: -ts={current_params['-ts']}, OOM device={failing_device}", }
+
                 adjusted = False
 
                 # Check for Saturation (Ping-Pong)
@@ -108,6 +121,32 @@ class TuningWizard:
                     is_ping_pong = True
 
                 if is_ping_pong:
+                    ping_pong_count += 1
+                    # Step 2: Real midpoint refinement instead of instant saturation
+                    if last_ts_vals is not None and ping_pong_count <= max_midpoint_refinements:
+                        gap = max(abs(ts_vals[i] - last_ts_vals[i]) for i in range(len(ts_vals)))
+                        if gap >= 0.005:
+                            # Compute midpoint between current and last split
+                            mid_ts_vals = [(ts_vals[i] + last_ts_vals[i]) / 2 for i in range(len(ts_vals))]
+                            yield {'action': 'log',
+                                   'message': f"  > Ping-pong detected (round {ping_pong_count}). Trying midpoint: {','.join([f'{x:.3f}' for x in mid_ts_vals])}",}
+                            ts_vals = mid_ts_vals
+                            current_params['-ts'] = ",".join([f"{x:.3f}" for x in ts_vals])
+                            last_failing_device = failing_device
+                            last_ts_vals = None  # Reset so next ping-pong compares against this midpoint
+                            continue
+                        else:
+                            yield {'action': 'log',
+                                   'message': f"  > Ping-pong gap too small ({gap:.4f}). True saturation reached.",}
+
+                    # Step 1: Log full per-GPU VRAM snapshot on saturation
+                    vram_snapshot = ''
+                    if hasattr(self, 'last_successful_vram_info') and self.last_successful_vram_info:
+                        parts = [f"GPU {gid}: {((info['total_gb'] - info['used_gb']) * 1024):.0f} MiB free"
+                                 for gid, info in self.last_successful_vram_info.items()]
+                        vram_snapshot = ' | '.join(parts)
+                        yield {'action': 'log', 'message': f"  > [TS diag] VRAM at saturation: {vram_snapshot}",}
+
                     return {'success': False, 'params': current_params, 'reason': 'saturation',
                             'error_details': error_details}
 
@@ -843,6 +882,10 @@ class TuningWizard:
             else:
                 yield {'action': 'log', 'message': "  > Doubling failed. Switching to Binary Search Refinement."}
 
+                # Seed the refinement search from the most-converged split the failed
+                # doubling attempt already found, instead of the stale baseline split.
+                running_ts = temp_params.get('-ts', best_known_params.get('-ts'))
+
                 # --- Binary Search Refinement ---
                 low_ctx, high_ctx = current_ctx, next_ctx
                 while (high_ctx - low_ctx) >= 1024:
@@ -852,10 +895,16 @@ class TuningWizard:
 
                     yield {'action': 'log', 'message': f"> Refinement: Testing context {mid_ctx}..."}
                     temp_params = best_known_params.copy()
+                    if running_ts:
+                        temp_params['-ts'] = running_ts   # start near the known-good split
                     temp_params['-c'] = str(mid_ctx)
 
                     # Use helper for the binary check
                     result = yield from self._run_test_with_ts_balancing(temp_params, timeout, max_retries=50)
+
+                    # Persist whatever split was discovered — success OR failure — for the next iteration
+                    if result.get('params') and '-ts' in result['params']:
+                        running_ts = result['params']['-ts']
 
                     if result['success']:
                         yield {'action': 'log', 'message': "  > Success. Searching higher..."}
@@ -892,9 +941,48 @@ class TuningWizard:
                     else:
                         yield {'action': 'log', 'message': "  > Failed. Searching lower..."}
                         high_ctx = mid_ctx
-                break
 
-        # --- PHASE 4.5: VRAM Back-Fill (MoE Only) ---
+                # Step 4: After binary search converges, don't unconditionally break
+                # Set current_ctx to the best known value and check if there's still surplus
+                current_ctx = low_ctx
+                best_known_params['-c'] = str(current_ctx)
+
+                # Check if there's meaningful surplus to continue doubling
+                should_stop_after_refinement = False
+                if getattr(self, 'ensure_safe_overhead', True) and hasattr(self, 'last_successful_vram_info') and self.last_successful_vram_info:
+                    try:
+                        if strategy == 'single_gpu':
+                            p_id = self.primary_gpu_id
+                            lookup_id = p_id
+                            target_gpu = next((g for g in self.analysis.get('gpus', []) if g['id'] == p_id), None)
+                            if target_gpu and 'nvml_id' in target_gpu: lookup_id = target_gpu['nvml_id']
+
+                            if lookup_id in self.last_successful_vram_info:
+                                info = self.last_successful_vram_info[lookup_id]
+                                free_mib = (info['total_gb'] - info['used_gb']) * 1024
+                                if free_mib < 600:
+                                    should_stop_after_refinement = True
+
+                        elif strategy == 'multi_vram':
+                            total_surplus_mib = 0
+                            for gid, info in self.last_successful_vram_info.items():
+                                free_mib = (info['total_gb'] - info['used_gb']) * 1024
+                                total_surplus_mib += max(0, free_mib - 600)
+
+                            if total_surplus_mib < 256:
+                                should_stop_after_refinement = True
+                    except Exception as e:
+                        yield {'action': 'log', 'message': f"  > Safety Check Warning: {e}"}
+
+                if should_stop_after_refinement:
+                    yield {'action': 'log', 'message': "  > Refinement complete. No surplus left. Stopping search."}
+                    break
+                else:
+                    yield {'action': 'log', 'message': f"  > Refinement complete. Surplus detected — resuming doubling from {current_ctx}."}
+                    continue
+
+        # --- PHASE 4.5: VRAM Back-Fill ---
+        # MoE (multi_cpu): reduce -ncmoe to move layers back to GPU
         if strategy_allows_cpu and '-ncmoe' in best_known_params and int(best_known_params.get('-ncmoe', 0)) > 0:
             yield {'action': 'log', 'message': "\\n[PHASE 4.5] Optimizing VRAM usage (Back-Fill)..."}
             while int(best_known_params['-ncmoe']) > 0:
@@ -913,6 +1001,40 @@ class TuningWizard:
                 else:
                     yield {'action': 'log', 'message': "  > VRAM saturated. Finalizing configuration."}
                     break
+
+        # Step 7: multi_vram Back-Fill — fine-tune -ts at final context to squeeze leftover headroom
+        if strategy == 'multi_vram' and '-ts' in best_known_params:
+            yield {'action': 'log', 'message': "\\n[PHASE 4.5] Optimizing VRAM usage (TS Back-Fill)..."}
+            ts_vals = [float(x) for x in best_known_params['-ts'].split(',')]
+            if len(ts_vals) >= 2:
+                primary_idx = self.primary_gpu_id
+                sec_idx = next((i for i in range(len(ts_vals)) if i != primary_idx), -1)
+                if sec_idx != -1:
+                    # Try shifting a small amount toward the primary (which typically has more headroom after context tuning)
+                    back_fill_step = 0.01
+                    for _ in range(10):
+                        if ts_vals[sec_idx] > 0.01:
+                            shift = min(back_fill_step, ts_vals[sec_idx] - 0.01)
+                            ts_vals[sec_idx] -= shift
+                            ts_vals[primary_idx] += shift
+                        else:
+                            break
+
+                        temp_ts = ",".join([f"{x:.3f}" for x in ts_vals])
+                        temp_params = best_known_params.copy()
+                        temp_params['-ts'] = temp_ts
+                        yield {'action': 'log', 'message': f"> TS Back-Fill: Testing split {temp_ts}..."}
+
+                        result = yield from self._run_test_with_ts_balancing(temp_params, timeout, max_retries=20)
+                        if result['success']:
+                            best_known_params = result['params'].copy()
+                            yield {'action': 'log', 'message': "  > Success. Keeping optimized split."}
+                        else:
+                            # Revert on failure
+                            ts_vals[sec_idx] += shift
+                            ts_vals[primary_idx] -= shift
+                            yield {'action': 'log', 'message': "  > TS Back-Fill saturated. Finalizing configuration."}
+                            break
 
         return best_known_params
 

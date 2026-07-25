@@ -161,8 +161,12 @@ class RightPanel(QWidget):
         button_layout.addWidget(save_button)
         layout.addLayout(button_layout)
 
-    def populate(self, command_parts: list[Parameter], model_name: str, env_vars: str = "", llamacpp_dir: str = ""):
-        """Clears and fills the editor with a new set of parameters."""
+    def populate(self, command_parts: list[Parameter], model_name: str, env_vars=None, llamacpp_dir=None):
+        """Clears and fills the editor with a new set of parameters.
+
+        env_vars and llamacpp_dir default to None (leave as-is) so callers that
+        forget to pass them won't silently wipe the user's input.
+        """
         # Block signals on the container widget to prevent textChanged from firing
         self.param_widget.blockSignals(True)
         self.env_vars_input.blockSignals(True)
@@ -174,10 +178,12 @@ class RightPanel(QWidget):
             self.model_name_input.setText(model_name)
             self.model_name_input.blockSignals(False)
 
-            self.env_vars_input.setPlainText(env_vars)
+            if env_vars is not None:
+                self.env_vars_input.setPlainText(env_vars)
 
             self.llamacpp_dir_input.blockSignals(True)
-            self.llamacpp_dir_input.setText(llamacpp_dir)
+            if llamacpp_dir is not None:
+                self.llamacpp_dir_input.setText(llamacpp_dir)
             self.llamacpp_dir_input.blockSignals(False)
 
             if not command_parts: return

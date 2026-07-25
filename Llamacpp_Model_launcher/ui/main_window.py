@@ -183,6 +183,10 @@ class MainWindow(QWidget):
         self.left_panel.set_tuning_mode(False)
         self.update_button_states()
 
+        # Step 4: Clean up snapshot on cancel
+        if hasattr(self, '_wizard_env_vars'): del self._wizard_env_vars
+        if hasattr(self, '_wizard_llamacpp_dir'): del self._wizard_llamacpp_dir
+
     def log_diagnostic(self, message):
         # Print to console for debugging
         print(message)
@@ -1089,6 +1093,14 @@ class MainWindow(QWidget):
                             free_mb = (info['total_gb'] - info['used_gb']) * 1024
                             self.left_panel.append_output(f"[WIZARD] Captured Resting VRAM: {free_mb:.2f} MiB free on Physical GPU {lookup_id} (Logical {p_id})")
 
+                        # Step 5: Log ALL GPUs' free VRAM, not just primary
+                        if self.wizard_last_loaded_vram:
+                            all_gpu_parts = []
+                            for gid, info in self.wizard_last_loaded_vram.items():
+                                free_mb = (info['total_gb'] - info['used_gb']) * 1024
+                                all_gpu_parts.append(f"GPU {gid}: {free_mb:.0f} MiB free")
+                            self.left_panel.append_output(f"[WIZARD] All GPUs: {' | '.join(all_gpu_parts)}")
+
                     # --- Capture Resource Probe Data (Active State) ---
                     if self.wizard_current_is_viability_check == "resource_probe":
                         ram_free = analyzer.get_live_ram_usage()
@@ -1207,6 +1219,11 @@ class MainWindow(QWidget):
         if "--jinja" not in current_params:
             self.left_panel.append_output("[INFO] --jinja flag not found. It will be added for the tuning process.")
             self.right_panel.add_parameter_row("--jinja", None)
+
+        # Step 1: Snapshot editor state so wizard-driven populate() calls don't wipe it
+        self._wizard_env_vars = self.right_panel.get_env_vars()
+        self._wizard_llamacpp_dir = self.right_panel.get_llamacpp_dir()
+
         QApplication.processEvents()
         analyzer = SystemAnalyzer()
         analysis_generator = analyzer.run_analysis(model_path)
@@ -1315,6 +1332,10 @@ class MainWindow(QWidget):
                 self._restore_params_from_snapshot()
                 self.right_panel._mark_as_dirty()
 
+        # Step 4: Clean up snapshot so stale values don't leak into future runs
+        if hasattr(self, '_wizard_env_vars'): del self._wizard_env_vars
+        if hasattr(self, '_wizard_llamacpp_dir'): del self._wizard_llamacpp_dir
+
     def _update_editor_params(self, params_to_update):
         current_params_list = self.right_panel.get_parameters()
         params_dict = {p.key: p.value for p in current_params_list}
@@ -1324,10 +1345,20 @@ class MainWindow(QWidget):
             else:
                 params_dict[param] = value
         updated_params_list = [Parameter(k, v) for k, v in params_dict.items()]
-        self.right_panel.populate(updated_params_list, self.right_panel.get_model_name())
+        self.right_panel.populate(
+            updated_params_list,
+            self.right_panel.get_model_name(),
+            getattr(self, '_wizard_env_vars', self.right_panel.get_env_vars()),
+            getattr(self, '_wizard_llamacpp_dir', self.right_panel.get_llamacpp_dir()),
+        )
         QApplication.processEvents()
 
     def _restore_params_from_snapshot(self):
         if not self.best_params_snapshot: return
         command_parts = self.command_builder.parse(self.best_params_snapshot)
-        self.right_panel.populate(command_parts, self.right_panel.get_model_name())
+        self.right_panel.populate(
+            command_parts,
+            self.right_panel.get_model_name(),
+            getattr(self, '_wizard_env_vars', self.right_panel.get_env_vars()),
+            getattr(self, '_wizard_llamacpp_dir', self.right_panel.get_llamacpp_dir()),
+        )

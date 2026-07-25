@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- **Multi-GPU "Maximize Context" early stop**: Binary search refinement no longer resets `-ts` to stale baseline on every iteration; carries a running `-ts` value seeded from the failed doubling attempt and persisted across all refinement iterations
+- **Doubling loop premature exit**: After binary search refinement, checks system-wide VRAM surplus before stopping; resumes doubling if headroom remains
+- **Ping-pong saturation too aggressive**: Replaced instant "saturation" with real midpoint refinement (up to 8 bisection rounds); only declares saturation when gap < 0.005
+- **Adaptive `-ts` step size**: Step size now scales with smaller GPU's VRAM fraction, reducing overshoot on asymmetric setups (e.g., 24+8 GB)
+- **VRAM Back-Fill for multi_vram**: Added TS Back-Fill pass that fine-tunes `-ts` at final context to squeeze leftover headroom
+- **Env vars / llama.cpp dir wiped during tuning**: `RightPanel.populate()` now uses `None` sentinels instead of `""` defaults; wizard snapshots and threads these values through all `populate()` calls
+- **Per-GPU VRAM visibility**: Resting VRAM log now shows all GPUs' free VRAM, not just the primary
+
+### Technical Details
+- `tuning_wizard.py` — `_run_test_with_ts_balancing`: Added diagnostic logging (TS values, OOM device, per-GPU VRAM on saturation), midpoint refinement with ping-pong count and gap tolerance, adaptive step size based on GPU asymmetry
+- `tuning_wizard.py` — `_tune_context_size_adaptive`: Added `running_ts` persistence across binary-search iterations, surplus check after refinement to resume doubling, TS Back-Fill for `multi_vram` strategy
+- `right_panel.py` — `populate()`: Changed `env_vars` and `llamacpp_dir` defaults from `""` to `None`; fields only overwritten when explicit value passed
+- `main_window.py` — `start_tuning_wizard()`: Captures `_wizard_env_vars` and `_wizard_llamacpp_dir` before wizard starts
+- `main_window.py` — `_update_editor_params()` / `_restore_params_from_snapshot()`: Pass snapped values through to `populate()`
+- `main_window.py` — `_finish_tuning_wizard()` / `_cancel_tuning_wizard()`: Clean up snapshot attributes
+- `main_window.py` — idle-signal VRAM logging: Logs all GPUs' free VRAM on single line
+
+> 🤖 All changes implemented by [pi](https://github.com/earendil-works/pi-coding-agent) with Qwen 3.6 27B UD Q5K XL
+
+## [Unreleased]
+
 ### Added
 - **Per-model Llama.cpp directory override**: Associate a specific llama.cpp build (CUDA, Vulkan, etc.) with each model via `llamacppdir:` line in `models.txt`
 - **Llama.cpp Directory field in Right Panel**: Text input with **Browse...** button and **× clear** button for per-model directory management

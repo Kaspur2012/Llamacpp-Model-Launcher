@@ -1,0 +1,12 @@
+So here is the normal workflow after you have fixes or added features to this project:
+
+First, you need to create a standalone EXE file for this project, and here are the instructions on how to do it:
+pyinstaller --onefile --windowed --icon=C:\Users\Anhtien\Pictures\llamacpp.ico run_app.py
+
+Second, you need to document what you have done in a easy to understand manner and save it to a file label appropriately, so for example:
+Previous changes that I've made it is saved in a file called release version 0.50.md so depend on what releases there are, it will be the next release. So if the latest release in there is version 0.50 then this version will be 0.51 
+And you can read the format of the release so you can have the same format as before 
+
+Third, I need you to update The readme.md file specially under the change log to have what you have done in this session and you can read the change log to see how it is formatted in the readme.md so you can have the similar format 
+
+And fourth, I need you to push all the files that have been changed to my GitHub repo for me for this project. If you run into a problem that you're not able to push, it's probably because I have not logged in. So if you run into a problem, ask me to log in and then push all the changes to my GitHub repo 
