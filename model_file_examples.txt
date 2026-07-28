@@ -1,14 +1,6 @@
 gpt-oss-20b-MXFP4
 llama-server.exe -m D:\lm_studio\lmstudio-community\gpt-oss-20b-GGUF\gpt-oss-20b-MXFP4.gguf --jinja -c 131000 -ngl 999 -fa on --temp 1.0 --top-k 100 --top-p 1.0 --min-p 0.05 --repeat-penalty 1.1 --no-mmap --split-mode none --main-gpu 0 --parallel 1 --ubatch-size 8192 --batch-size 8192 --seed 1 -np 1 -fit off --no-warmup --spec-type ngram-simple
 
-([0-9]|[1-9][0-9]).ffn_gate.weight=CUDA0 -ot blk.
-([0-9]|[1-9][0-9]).ffn_up.weight=CUDA0 -ot blk.
-([0-9]|[1-9][0-9]).ffn_down.weight=CUDA0
-([0-9]|[1-9][0-9]).ffn_gate.weight=CUDA0 -ot blk.
-([0-9]|[1-9][0-9]).ffn_up.weight=CUDA0 -ot blk.
-([0-9]|[1-9][0-9]).ffn_down.weight=CUDA0
-
-
 Qwen3.6-27B-UD-Q5_K_XL_MTP_200K-MultiGPU-Tensor
 llama-server.exe -m D:/backup_models/llm/Qwen3.6-27B-UD-Q5_K_XL.gguf --jinja --temp 0.6 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode tensor --spec-draft-n-max 3 -c 185000 --spec-default --chat-template-file D:\backup_models\llm\qwen36_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true}" -ts 0.840,0.160 -ctk q8_0 -ctv q8_0 --mmproj D:/backup_models/llm/mmproj-BF16.gguf
 env:MTMD_BACKEND_DEVICE=cuda1
@@ -46,5 +38,7 @@ Qwen3.6-27B-UD-Q5_K_XL_MTP_F16_125K-MultiGPU-Tensor
 llama-server.exe -m D:/backup_models/llm/Qwen3.6-27B-UD-Q5_K_XL.gguf --jinja --temp 0.6 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode tensor --spec-draft-n-max 3 -c 125000 --spec-default --chat-template-file D:\backup_models\llm\qwen36_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true}" -ts 0.820,0.180 --mmproj D:/backup_models/llm/mmproj-BF16.gguf
 env:MTMD_BACKEND_DEVICE=cuda1
 
+
 NInfer-qwen3_6_27b
 ninfer-serve.exe D:/backup_models/llm/qwen3_6_27b.ninfer --host 0.0.0.0 --port 8080 --max-context 115000 --kv-dtype int8 --mtp-draft-tokens 3 --lm-head-draft --no-cuda-graph --default-max-tokens 32768
+llamacppdir: D:/llamacpp/ninfer-rtx3090-windows-x64-0.2.0-rtx3090-v2/ninfer-rtx3090-windows-x64-0.2.0-rtx3090-v2
