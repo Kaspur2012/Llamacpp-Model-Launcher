@@ -295,6 +295,8 @@ You can create your own model_file.txt from scratch or save the model_file_examp
         *   `--no-webui` appended to NInfer commands — now checks engine type before modifying
         *   `delete_model` now properly removes associated `env:` and `llamacppdir:` lines
 
+    *   **NInfer engine references**: https://github.com/Don-Chad/ninfer-3090 · https://github.com/Neroued/ninfer
+
     > 🤖 All changes implemented by [pi](https://pi.dev) with Qwen 3.6 27B
 
 *   07/18/2026 -
