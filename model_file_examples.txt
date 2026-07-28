@@ -1,132 +1,50 @@
-Devstral-Small-2507-Q6_K
-llama-server.exe -m D:\lm_studio\lmstudio-community\Devstral-Small-2507-GGUF\Devstral-Small-2507-Q6_K.gguf --jinja -c 64000 -ngl 999 -fa on --temp 0.1 --top-k 64 --top-p 0.95 --min-p 0.05 --repeat-penalty 1 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup --seed 1
-
-Devstral-Small-2507-Q6_K-DUAL_GPU
-llama-server.exe -m D:\lm_studio\lmstudio-community\Devstral-Small-2507-GGUF\Devstral-Small-2507-Q6_K.gguf --jinja -c 130000 -ngl 999 -fa on --temp 0.1 --top-k 64 --top-p 0.95 --min-p 0.05 --repeat-penalty 1 --no-mmap --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup -ts 75,25
-
-Devstral-Small-2507-Q6_K_DRAFT
-llama-server.exe -m D:\lm_studio\lmstudio-community\Devstral-Small-2507-GGUF\Devstral-Small-2507-Q6_K.gguf --jinja -c 50000 -ngl 999 -fa on --temp 0.1 --top-k 64 --top-p 0.95 --min-p 0.05 --repeat-penalty 1 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup -md D:/lm_studio/mradermacher/Devstral-Small-2507-DRAFT-0.5B-GGUF/Devstral-Small-2507-DRAFT-0.5B.Q4_K_M.gguf --cache-type-k-draft q8_0 --cache-type-v-draft q8_0 --device-draft CUDA0 --seed 1
-
-
-
-Magistral-Small-2509-UD-Q5_K_XL
-llama-server.exe -m D:\lm_studio\unsloth\Magistral-Small-2509-GGUF\Magistral-Small-2509-UD-Q5_K_XL.gguf --jinja -c 85000 -ngl 999 -fa on --temp 0.7 --top-k 40 --top-p 0.95 --min-p 0.01 --repeat-penalty 1.1 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup
-
-Mistral-Small-3.2-24B-Instruct-2506-UD-Q5_K_XL
-llama-server.exe -m D:/lm_studio/unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF/Mistral-Small-3.2-24B-Instruct-2506-UD-Q5_K_XL.gguf --jinja -c 75000 -ngl 999 -fa on --temp 0.15 --top-k 40 --top-p 1 --min-p 0.05 --repeat-penalty 1.1 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup -md D:/lm_studio/mradermacher/Mistral-Small-3.1-DRAFT-0.5B-GGUF/Mistral-Small-3.1-DRAFT-0.5B.Q4_K_M.gguf --device-draft CUDA0 --cache-type-k-draft q8_0 --cache-type-v-draft q8_0
-
-Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q5_K_XL
-llama-server.exe -m D:\lm_studio\unsloth\Qwen3-Coder-30B-A3B-Instruct-1M-GGUF\Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q5_K_XL.gguf --jinja -c 30000 -ngl 999 -fa on --temp 0.7 --top-k 20 --top-p 0.8 --min-p 0 --repeat-penalty 1.1 --no-mmap --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup --ubatch-size 2048 --split-mode none
-
-Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q5_K_XL-DUAL-GPU
-llama-server.exe -m D:\lm_studio\unsloth\Qwen3-Coder-30B-A3B-Instruct-1M-GGUF\Qwen3-Coder-30B-A3B-Instruct-1M-UD-Q5_K_XL.gguf --jinja -c 121000 -ngl 999 -fa on --temp 0.7 --top-k 20 --top-p 0.8 --min-p 0 --repeat-penalty 1.1 --no-mmap --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup -ts 78,22 --ubatch-size 2048
-
-Qwen3-VL-30B-A3B-Instruct-UD-Q4_K_XL_TEXT
-llama-server.exe -m D:/lm_studio/unsloth/Qwen3-VL-30B-A3B-Instruct-GGUF/Qwen3-VL-30B-A3B-Instruct-UD-Q4_K_XL.gguf --jinja -c 70000 -ngl 999 -fa on --temp 1.0 --top-k 40 --top-p 1.0 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup
-
-Qwen3-VL-30B-A3B-Instruct-UD-Q4_K_XL_VL
-llama-server.exe -m D:/lm_studio/unsloth/Qwen3-VL-30B-A3B-Instruct-GGUF/Qwen3-VL-30B-A3B-Instruct-UD-Q4_K_XL.gguf --jinja -c 15000 -ngl 999 -fa on --temp 0.7 --top-k 20 --top-p 0.8 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup --mmproj D:\llamacpp\mmproj-BF16.gguf
-
-Qwen3-VL-30B-A3B-Thinking-UD-Q4_K_XL_TEXT
-llama-server.exe -m D:/lm_studio/unsloth/Qwen3-VL-30B-A3B-Thinking-GGUF/Qwen3-VL-30B-A3B-Thinking-UD-Q4_K_XL.gguf --jinja -c 131000 -ngl 999 -fa on --temp 1.0 --top-k 40 --top-p 1.0 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup
-
-Qwen3-VL-30B-A3B-Thinking-UD-Q4_K_XL_VL
-llama-server.exe -m D:/lm_studio/unsloth/Qwen3-VL-30B-A3B-Thinking-GGUF/Qwen3-VL-30B-A3B-Thinking-UD-Q4_K_XL.gguf --jinja -c 15000 -ngl 999 -fa on --temp 0.7 --top-k 20 --top-p 0.8 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup --mmproj D:\llamacpp\mmproj-BF16.gguf
-
-Qwen3-VL-32B-Instruct.Q4_K_M_TEXT_GPU0
-llama-server.exe -m D:/lm_studio/mradermacher/Qwen3-VL-32B-Instruct-GGUF/Qwen3-VL-32B-Instruct.Q4_K_M.gguf --jinja -c 15480 -ngl 99 -fa on --temp 1.0 --top-k 40 --top-p 1.0 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --split-mode none --main-gpu 0 --no-warmup -md D:/lm_studio/lmstudio-community/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf --flash-attn on -ctk q8_0 -ctv q8_0 -ngld 99 --cache-type-k-draft q8_0 --cache-type-v-draft q8_0 -mg 0 -devd CUDA0
-
-
-Qwen3-VL-32B-Instruct.Q4_K_M_VL
-llama-server.exe -m D:/lm_studio/mradermacher/Qwen3-VL-32B-Instruct-GGUF/Qwen3-VL-32B-Instruct.Q4_K_M.gguf --jinja -c 17000 -ngl 999 -fa on --temp 0.7 --top-k 20 --top-p 0.8 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup --mmproj D:\llamacpp\Qwen3-VL-32B-Instruct.mmproj-f16.gguf
-
-Qwen3-VL-32B-Instruct.Q6_K_TEXT_DRAFT
-llama-server.exe -m D:/lm_studio/mradermacher/Qwen3-VL-32B-Instruct-GGUF/Qwen3-VL-32B-Instruct.Q6_K.gguf --jinja -c 15000 -ngl 999 -fa on --temp 1.0 --top-k 40 --top-p 1.0 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup -ts 76,24 --main-gpu 0 -md D:/lm_studio/lmstudio-community/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf --cache-type-k-draft q8_0 --cache_type-v-draft q8_0 --device-draft CUDA0
-
-Qwen3-VL-32B-Instruct.Q6_K_VL
-llama-server.exe -m D:/lm_studio/mradermacher/Qwen3-VL-32B-Instruct-GGUF/Qwen3-VL-32B-Instruct.Q6_K.gguf --jinja -c 7000 -ngl 999 -fa on --temp 1.0 --top-k 40 --top-p 1.0 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup -ts 76,24 --main-gpu 0 --mmproj D:\llamacpp\Qwen3-VL-32B-Instruct.mmproj-f16.gguf
-
-Qwen3-VL-32B-Thinking-Q6_K_VL
-llama-server.exe -m D:/lm_studio/lmstudio-community/Qwen3-VL-32B-Thinking-GGUF/Qwen3-VL-32B-Thinking-Q6_K.gguf --jinja -c 15000 -ngl 999 -fa on --temp 1.0 --top-k 40 --top-p 1.0 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup -ts 76,24 --main-gpu 0 --mmproj D:\llamacpp\Qwen3-VL-32B-Instruct.mmproj-f16.gguf
-
-Qwen3-VL-32B-Thinking.Q4_K_M_TEXT
-llama-server.exe -m D:/lm_studio/mradermacher/Qwen3-VL-32B-Thinking-GGUF/Qwen3-VL-32B-Thinking.Q4_K_M.gguf --jinja -c 30000 -ngl 999 -fa on --temp 1.0 --top-k 40 --top-p 1.0 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup
-
-Qwen3-VL-32B-Thinking.Q4_K_M_TEXT_DRAFT
-llama-server.exe -m D:/lm_studio/mradermacher/Qwen3-VL-32B-Thinking-GGUF/Qwen3-VL-32B-Thinking.Q4_K_M.gguf --jinja -c 20000 -ngl 999 -fa on --temp 1.0 --top-k 40 --top-p 1.0 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup --main-gpu 0 -md D:/lm_studio/lmstudio-community/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf --cache-type-k-draft q8_0 --cache_type-v-draft q8_0 --device-draft CUDA0 --split-mode none
-
-Qwen3-VL-32B-Thinking.Q4_K_M_TEXT_DRAFT _dual_gpu
-llama-server.exe -m D:/lm_studio/mradermacher/Qwen3-VL-32B-Thinking-GGUF/Qwen3-VL-32B-Thinking.Q4_K_M.gguf --jinja -c 45000 -ngl 999 -fa on --temp 1.0 --top-k 40 --top-p 1.0 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup -ts 77,23 --main-gpu 0 -md D:/lm_studio/lmstudio-community/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf --cache-type-k-draft q8_0 --cache_type-v-draft q8_0 --device-draft CUDA0
-
-Qwen3-VL-32B-Thinking.Q4_K_M_VL
-llama-server.exe -m D:/lm_studio/mradermacher/Qwen3-VL-32B-Thinking-GGUF/Qwen3-VL-32B-Thinking.Q4_K_M.gguf --jinja -c 17000 -ngl 999 -fa on --temp 0.7 --top-k 20 --top-p 0.8 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup --mmproj D:\llamacpp\Qwen3-VL-32B-Instruct.mmproj-f16.gguf
-
-Qwen3-VL-32B-Thinking.Q4_K_M_VL_dual_gpu
-llama-server.exe -m D:/lm_studio/mradermacher/Qwen3-VL-32B-Thinking-GGUF/Qwen3-VL-32B-Thinking.Q4_K_M.gguf --jinja -c 12000 -ngl 999 -fa on --temp 0.7 --top-k 20 --top-p 0.8 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup --mmproj D:\llamacpp\Qwen3-VL-32B-Instruct.mmproj-f16.gguf -ts 85,15
-
-Qwen3-VL-32B-Thinking.Q6_K_TEXT_DRAFT
-llama-server.exe -m D:/lm_studio/lmstudio-community/Qwen3-VL-32B-Thinking-GGUF/Qwen3-VL-32B-Thinking-Q6_K.gguf --jinja -c 20000 -ngl 999 -fa on --temp 1.0 --top-k 40 --top-p 1.0 --min-p 0.05 --repeat-penalty 1.0 --no-mmap --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup -ts 76,24 --main-gpu 0 -md D:/lm_studio/lmstudio-community/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf --cache-type-k-draft q8_0 --cache_type-v-draft q8_0 --device-draft CUDA0
-
-Seed-OSS-36B-Instruct-UD-Q4_K_XL 20K ctx
-llama-server.exe -m D:\lm_studio\unsloth\Seed-OSS-36B-Instruct-GGUF\Seed-OSS-36B-Instruct-UD-Q4_K_XL.gguf --jinja -c 20000 -ngl 999 --cache-type-k q8_0 --cache-type-v q8_0 -fa on --temp 0.20 --top-p 0.95 --min-p 0.05 --repeat-penalty 1.1 --no-mmap --split-mode none --main-gpu 0 --no-warmup --chat-template-kwargs "{\"thinking_budget\": 8192}"
-
-Seed-OSS-36B-Instruct-UD-Q4_K_XL 30K ctx_shift
-llama-server.exe -m D:\lm_studio\unsloth\Seed-OSS-36B-Instruct-GGUF\Seed-OSS-36B-Instruct-UD-Q4_K_XL.gguf --jinja -c 30000 -ngl 999 --cache-type-k q4_0 --cache-type-v q4_0 -fa on --temp 0.20 --top-p 0.95 --min-p 0.05 --repeat-penalty 1.1 --no-mmap --split-mode none --main-gpu 0 --context-shift --no-warmup
-
-Seed-OSS-36B-Instruct-UD-Q4_K_XL 60K ctx dua_gpu
-llama-server.exe -m D:\lm_studio\unsloth\Seed-OSS-36B-Instruct-GGUF\Seed-OSS-36B-Instruct-UD-Q4_K_XL.gguf --jinja -c 60000 -ngl 999 --cache-type-k q8_0 --cache-type-v q8_0 -fa on --temp 0.20 --top-p 0.95 --min-p 0.05 --repeat-penalty 1.1 --no-mmap --main-gpu 0 -ts 52/13 --no-warmup
-
-Llama-3.3-70B-Instruct-UD-IQ3_XXS_DRAFT_AUTO_TUNED
-llama-server.exe -m D:\lm_studio\unsloth\Llama-3.3-70B-Instruct-GGUF\Llama-3.3-70B-Instruct-UD-IQ3_XXS.gguf -c 15360 --jinja --temp 0.7 --top-p 0.95 --min-p 0.05 -md D:\lm_studio\lmstudio-community\Llama-3.2-1B-Instruct-GGUF\Llama-3.2-1B-Instruct-Q4_K_M.gguf --no-warmup --no-mmap --flash-attn on -ctk q8_0 -ctv q8_0 --cache-type-k-draft q8_0 --cache-type-v-draft q8_0 -ngld 99 -ngl 99 -mg 0 -devd CUDA0 -ts 0.77,0.23 --top-k 40 --repeat-penalty 1.1
-
-UIGEN-X-32B-0727.Q4_K_M
-llama-server.exe -m D:\lm_studio\mradermacher\UIGEN-X-32B-0727-GGUF\UIGEN-X-32B-0727.Q4_K_M.gguf --jinja -c 19000 -ngl 999 -fa on --temp 0.6 --top-k 40 --top-p 0.9 --min-p 0.05 --repeat-penalty 1.1 --no-mmap --split-mode none --main-gpu 0 --no-warmup
-
-
-gemma-3-27b-it-qat-UD-Q4_K_XL
-llama-server.exe -m D:\lm_studio\unsloth\gemma-3-27b-it-qat-GGUF\gemma-3-27b-it-qat-UD-Q4_K_XL.gguf --jinja -c 131000 -ngl 999 -fa on --temp 1 --top-k 64 --top-p 0.95 --min-p 0.05 --repeat-penalty 1.1 --no-mmap --split-mode none --main-gpu 0 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup
-
-gpt-oss-120b-MXFP4
-llama-server.exe -m D:/lm_studio/lmstudio-community/gpt-oss-120b-GGUF/gpt-oss-120b-MXFP4-00001-of-00002.gguf --jinja -c 20000 -ngl 99 -fa on --cache-type-k q8_0 --cache-type-v q8_0 --temp 1.0 --top-k 100 --top-p 1.0 --min-p 0.05 --repeat-penalty 1.1 --n-cpu-moe 20 -ts "87, 13" -t 8 --main-gpu 0 --no-mmap --no-warmup --chat-template-kwargs "{\"reasoning_effort\": \"medium\"}"
-
 gpt-oss-20b-MXFP4
-llama-server.exe -m D:\lm_studio\lmstudio-community\gpt-oss-20b-GGUF\gpt-oss-20b-MXFP4.gguf --jinja -c 131000 -ngl 999 -fa on --temp 1.0 --top-k 100 --top-p 1.0 --min-p 0.05 --repeat-penalty 1.1 --no-mmap --split-mode none --main-gpu 0 --chat-template-kwargs "{\"reasoning_effort\": \"medium\"}" --no-warmup --parallel 1 --ubatch-size 8192 --batch-size 8192 --seed 1
+llama-server.exe -m D:\lm_studio\lmstudio-community\gpt-oss-20b-GGUF\gpt-oss-20b-MXFP4.gguf --jinja -c 131000 -ngl 999 -fa on --temp 1.0 --top-k 100 --top-p 1.0 --min-p 0.05 --repeat-penalty 1.1 --no-mmap --split-mode none --main-gpu 0 --parallel 1 --ubatch-size 8192 --batch-size 8192 --seed 1 -np 1 -fit off --no-warmup --spec-type ngram-simple
 
-nvidia_Llama-3_3-Nemotron-Super-49B-v1_5-Q4_K_S
-llama-server.exe -m D:\lm_studio\bartowski\nvidia_Llama-3_3-Nemotron-Super-49B-v1_5-GGUF\nvidia_Llama-3_3-Nemotron-Super-49B-v1_5-Q4_K_S.gguf --jinja -c 25000 -ngl 99 -fa on --temp 0.6 --top-k 40 --top-p 0.95 --min-p 0.05 --repeat-penalty 1.1 --cache-type-k q8_0 --cache-type-v q8_0 --no-mmap -ts 52/28 --main-gpu 0 --no-warmup
-
-nvidia_Llama-3_3-Nemotron-Super-49B-v1_5-Q4_K_S_DRAFT
-llama-server.exe -m D:\lm_studio\bartowski\nvidia_Llama-3_3-Nemotron-Super-49B-v1_5-GGUF\nvidia_Llama-3_3-Nemotron-Super-49B-v1_5-Q4_K_S.gguf -md D:\lm_studio\lmstudio-community\Llama-3.2-1B-Instruct-GGUF\Llama-3.2-1B-Instruct-Q4_K_M.gguf --jinja -c 15000 -ngld 99 -ngl 99 -fa on --temp 0.6 --top-k 40 --top-p 0.95 --min-p 0.05 --repeat-penalty 1.1 --cache-type-k q8_0 --cache-type-v q8_0 --cache-type-k-draft q8_0 --cache-type-v-draft q8_0 --no-mmap -ts "0.65, 0.35" --main-gpu 0 --device-draft CUDA0 --no-warmup
-
-nvidia_Llanvidia_Llama-3_3-Nemotron-Super-49B-v1_5-Q4_K_S-EXPERIMENTAL
-llama-server.exe -m D:\lm_studio\bartowski\nvidia_Llama-3_3-Nemotron-Super-49B-v1_5-GGUF\nvidia_Llama-3_3-Nemotron-Super-49B-v1_5-Q4_K_S.gguf -md D:\lm_studio\lmstudio-community\Llama-3.2-1B-Instruct-GGUF\Llama-3.2-1B-Instruct-Q4_K_M.gguf --jinja -c 131000 -ngld 99 -ngl 58 -fa on --temp 0.8 --top-k 40 --top-p 0.95 --min-p 0.05 --repeat-penalty 1.1 --cache-type-k q8_0 --cache-type-v q8_0 --cache-type-k-draft q8_0 --cache-type-v-draft q8_0 --no-mmap -ts "83, 17" -t 8 --device-draft CUDA0 --main-gpu 0 --no-warmup
+([0-9]|[1-9][0-9]).ffn_gate.weight=CUDA0 -ot blk.
+([0-9]|[1-9][0-9]).ffn_up.weight=CUDA0 -ot blk.
+([0-9]|[1-9][0-9]).ffn_down.weight=CUDA0
+([0-9]|[1-9][0-9]).ffn_gate.weight=CUDA0 -ot blk.
+([0-9]|[1-9][0-9]).ffn_up.weight=CUDA0 -ot blk.
+([0-9]|[1-9][0-9]).ffn_down.weight=CUDA0
 
 
+Qwen3.6-27B-UD-Q5_K_XL_MTP_200K-MultiGPU-Tensor
+llama-server.exe -m D:/backup_models/llm/Qwen3.6-27B-UD-Q5_K_XL.gguf --jinja --temp 0.6 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode tensor --spec-draft-n-max 3 -c 185000 --spec-default --chat-template-file D:\backup_models\llm\qwen36_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true}" -ts 0.840,0.160 -ctk q8_0 -ctv q8_0 --mmproj D:/backup_models/llm/mmproj-BF16.gguf
+env:MTMD_BACKEND_DEVICE=cuda1
+
+Qwen3.6-27B-UD-Q5_K_XL_MTP
+llama-server.exe -m D:/backup_models/llm/Qwen3.6-27B-UD-Q5_K_XL.gguf --jinja --temp 0.6 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode none --spec-draft-n-max 3 -c 100000 --spec-default --chat-template-file D:\backup_models\llm\qwen36_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true}" -ctk q8_0 -ctv q8_0 --mmproj D:/backup_models/llm/mmproj-BF16.gguf
+env:MTMD_BACKEND_DEVICE=cuda1
+
+gemma-4-31B-it-qat-UD-Q4_K_XL
+llama-server.exe -m D:/backup_models/llm/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf -c 100000 --jinja --temp 1 --top-k 64 --top-p 0.95 --min-p 0.05 --spec-draft-n-max 3 --spec-type draft-mtp --no-warmup -ngl 99 -md D:/backup_models/llm/mtp-gemma-4-31B-it.gguf --spec_default -fit off -mg 0 --split-mode none -ctk q8_0 -ctv q8_0 -np 1 --flash-attn on --no-mmap -ngld 99 -devd CUDA0 --mmproj D:/backup_models/llm/gemma4_31b_mmproj-F16.gguf
+env:MTMD_BACKEND_DEVICE=cuda1
 
 
+Qwen3.6-27B-UD-Q4_K_XL_MTP
+llama-server.exe -m D:/backup_models/llm/Qwen3.6-27B-UD-Q4_K_XL.gguf --jinja --temp 0.6 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode none --spec-draft-n-max 3 -c 145000 --spec-default --mmproj D:\backup_models\llm\mmproj-BF16.gguf --chat-template-file D:\backup_models\llm\qwen36_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true}" -ctk q8_0 -ctv q8_0
+env:MTMD_BACKEND_DEVICE=cuda1
 
+thinkingcap-qwen3.6-27b-q5_k_m
+llama-server.exe -m D:/backup_models/llm/thinkingcap-qwen3.6-27b-q5_k_m.gguf --jinja --temp 0.6 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode none --spec-draft-n-max 3 -c 110000 --spec-default --chat-template-file D:\backup_models\llm\qwen36_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true}" -ctk q8_0 -ctv q8_0 --mmproj D:/backup_models/llm/mmproj-BF16.gguf
+env:MTMD_BACKEND_DEVICE=cuda1
 
-Tune Model Test
-llama-server.exe -m D:\lm_studio\bartowski\nvidia_Llama-3_3-Nemotron-Super-49B-v1_5-GGUF\nvidia_Llama-3_3-Nemotron-Super-49B-v1_5-Q4_K_S.gguf --jinja -c 4096 --temp 0.1 --top-k 100 --top-p 0.95 --min-p 0.05 -md D:/lm_studio/lmstudio-community/Llama-3.2-1B-Instruct-GGUF/Llama-3.2-1B-Instruct-Q4_K_M.gguf
+Qwen3.6-27B-Fable-Fus-711-UnHeretic-NM-DAU-NEO-MAX-NEO-MTP-Q5_K_S
+llama-server.exe -m D:/backup_models/llm/Qwen3.6-27B-Fable-Fus-711-UnHeretic-NM-DAU-NEO-MAX-NEO-MTP-Q5_K_S.gguf --jinja --temp 0.6 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode none --spec-draft-n-max 3 -c 95000 --spec-default --chat-template-file D:\backup_models\llm\qwen36_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true}" -ctk q8_0 -ctv q8_0 --mmproj D:/backup_models/llm/mmproj-BF16.gguf
+env:MTMD_BACKEND_DEVICE=cuda1
 
+Qwen3.6-27B-Fable-Fus-711-UnHeretic-NM-DAU-NEO-MAX-NEO-MTP-Q4_K_M
+llama-server.exe -m D:/backup_models/llm/Qwen3.6-27B-Fable-Fus-711-UnHeretic-NM-DAU-NEO-MAX-NEO-MTP-Q4_K_M.gguf --jinja --temp 0.6 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode none --spec-draft-n-max 3 -c 130000 --spec-default --chat-template-file D:\backup_models\llm\qwen36_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true}" -ctk q8_0 -ctv q8_0 --mmproj D:/backup_models/llm/mmproj-BF16.gguf
+env:MTMD_BACKEND_DEVICE=cuda1
 
-Qwen3-Next-80B-A3B-Thinking-UD-Q4_K_XL
-llama-server.exe -m D:/lm_studio/unsloth/Qwen3-Next-80B-A3B-Thinking-GGUF/Qwen3-Next-80B-A3B-Thinking-UD-Q4_K_XL.gguf -c 262144 --jinja --temp 0.6 --top-k 20 --top-p 0.95 --min-p 0 --no-warmup -ngl 99 -ctk q8_0 -ctv q8_0 --flash-attn on --no-mmap -mg 0 -ncmoe 21 -ts 0.848,0.152
+Qwen3.6-27B-UD-Q6_K_XL_MTP_95K-MultiGPU-Tensor
+llama-server.exe -m D:/backup_models/llm/Qwen3.6-27B-UD-Q6_K_XL.gguf --jinja --temp 0.6 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode tensor --spec-draft-n-max 3 -c 95000 --spec-default --chat-template-file D:\backup_models\llm\qwen36_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true}" -ts 0.810,0.190 -ctk q8_0 -ctv q8_0 --mmproj D:/backup_models/llm/mmproj-BF16.gguf
+env:MTMD_BACKEND_DEVICE=cuda1
 
+Qwen3.6-27B-UD-Q5_K_XL_MTP_F16_125K-MultiGPU-Tensor
+llama-server.exe -m D:/backup_models/llm/Qwen3.6-27B-UD-Q5_K_XL.gguf --jinja --temp 0.6 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode tensor --spec-draft-n-max 3 -c 125000 --spec-default --chat-template-file D:\backup_models\llm\qwen36_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true}" -ts 0.820,0.180 --mmproj D:/backup_models/llm/mmproj-BF16.gguf
+env:MTMD_BACKEND_DEVICE=cuda1
 
------macOS Metal Examples (Apple Silicon)-----
-
-Qwen3.5-27B-macOS-Coding
-llama-server -m /path/to/models/Qwen3.5-27B-UD-Q8_K_XL.gguf --mmproj /path/to/models/mmproj-F32.gguf --jinja -c 262144 -ngl 999 -fa on --temp 0.1 --top-k 40 --top-p 0.95 --min-p 0.05 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup
-
-Qwen3.5-35B-A3B-macOS-Coding
-llama-server -m /path/to/models/Qwen3.5-35B-A3B-Q8_0.gguf --mmproj /path/to/models/mmproj-F32.gguf --jinja -c 262144 -ngl 999 -fa on --temp 0.1 --top-k 40 --top-p 0.95 --min-p 0.05 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup
-
-Devstral-Small-macOS-Chat
-llama-server -m /path/to/models/Devstral-Small-2507-Q6_K.gguf --jinja -c 64000 -ngl 999 -fa on --temp 0.7 --top-k 64 --top-p 0.95 --min-p 0.05 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup
-
-ninfer_qwen3.6_27b
-ninfer-serve.exe --host 127.0.0.1 --port 8080 --model-id qwen3.6-27b --max-context 8192 --kv-dtype int8 --mtp-draft-tokens 3 --lm-head-draft
-env:CUDA_VISIBLE_DEVICES=1
-llamacppdir: D:/llamacpp/ninfer-rtx3090-windows-x64-0.2.0-rtx3090-v2/ninfer-rtx3090-windows-x64-0.2.0-rtx3090-v2
-
+NInfer-qwen3_6_27b
+ninfer-serve.exe D:/backup_models/llm/qwen3_6_27b.ninfer --host 0.0.0.0 --port 8080 --max-context 115000 --kv-dtype int8 --mtp-draft-tokens 3 --lm-head-draft --no-cuda-graph --default-max-tokens 32768
