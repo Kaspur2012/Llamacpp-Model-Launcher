@@ -279,20 +279,23 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 ##   Change Log
 
-*   07/25/2026 -
-    *   **Multi-GPU "Maximize Context" early stop fix** — on asymmetric multi-GPU setups (e.g., RTX 3090 + RTX 2070), context tuning would stop far too early
-        *   **Binary search `-ts` persistence**: refinement loop now carries a running `-ts` value seeded from the failed doubling attempt, instead of resetting to stale baseline (`1.000,0.000`) every iteration. Reduces load/OOM cycles from dozens to 0-2 per refinement test
-        *   **Real midpoint refinement**: ping-pong detection no longer causes instant "saturation". Computes midpoint between last two splits, up to 8 bisection rounds. Only declares saturation when gap < 0.005
-        *   **Adaptive `-ts` step size**: step scales with smaller GPU's VRAM fraction (`max(0.005, min(0.02, smaller_gpu_frac * 0.15))`), reducing overshoot on asymmetric setups
-        *   **Doubling loop resumes after refinement**: after binary search converges, checks system-wide VRAM surplus before stopping. Resumes doubling if headroom remains
-        *   **TS Back-Fill for multi_vram**: fine-tunes `-ts` at final context (up to 10 small 1% shifts) to squeeze leftover headroom
-        *   **Per-GPU VRAM diagnostic logging**: every OOM attempt logs `-ts` values and failing device. On saturation, logs per-GPU VRAM snapshot. Resting VRAM log shows all GPUs
-    *   **Environment Variables / llama.cpp dir wipe during tuning fix** — `RightPanel.populate()` was silently blanking these fields on every wizard-driven parameter update
-        *   `populate()` now uses `None` sentinels instead of `""` defaults — fields only overwritten when explicit value passed
-        *   Wizard snapshots env vars and llama.cpp dir at start, threads them through all `populate()` calls
-        *   Snapshot cleaned up on wizard finish or cancel
+*   07/28/2026 -
+    *   **NInfer inference engine support** — full integration of `ninfer-serve.exe` alongside Llama.cpp models
+        *   Dual-engine support: recognizes both `llama-server.exe` and `ninfer-serve.exe` as valid executables
+        *   Positional model path for NInfer (no `-m` flag) — correctly handled in parse/build round-trips
+        *   Dedicated NInfer parameter set (5 groups: File Paths, Server, Context & Memory, Threading & GPU, Logging)
+        *   Parameter browser auto-switches between Llama.cpp and NInfer parameter sets per model
+        *   Tuning Wizard blocked for NInfer models with informative message
+        *   `--no-webui` auto-append excluded for NInfer (Llama.cpp-only flag)
+        *   Browse button for NInfer model paths with `.ninfer` file filter
+        *   Default template includes NInfer example entry
+    *   **Bug fixes**
+        *   `-m` flag leaking into NInfer commands — fixed `get_parameters()` to use stored original key
+        *   `UnboundLocalError` on model switch — moved `import os` to top of `_is_file_path()`
+        *   `--no-webui` appended to NInfer commands — now checks engine type before modifying
+        *   `delete_model` now properly removes associated `env:` and `llamacppdir:` lines
 
-    > 🤖 All changes implemented by [pi](https://github.com/earendil-works/pi-coding-agent) with Qwen 3.6 27B UD Q5K XL
+    > 🤖 All changes implemented by [pi](https://pi.dev) with Qwen 3.6 27B
 
 *   07/18/2026 -
     *   **Auto Browse buttons for path parameters** — parameters with file or directory paths now automatically get a **Browse...** button

@@ -27,6 +27,11 @@ llama-server.exe -m D:/backup_models/llm/gemma_4_26b_a4b_qat/gemma-4-26B-A4B-it-
 Qwen3.6-27B-UD-Q4_K_XL_MTP
 llama-server.exe -m D:/backup_models/llm/Qwen3.6-27B-UD-Q4_K_XL.gguf --jinja --temp 0.6 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode none --spec-draft-n-max 3 -c 145000 --spec-default --mmproj D:\\backup_models\\llm\\mmproj-BF16.gguf --chat-template-file D:\\backup_models\\llm\\qwen36_chat_template.jinja --chat-template-kwargs "{\\"preserve_thinking\\": true}" -ctk q8_0 -ctv q8_0
 env:MTMD_BACKEND_DEVICE=cuda1
+
+ninfer_qwen3.6_27b
+ninfer-serve.exe D:\\backup_models\\llm\\qwen3_6_27b.ninfer --host 127.0.0.1 --port 8080 --model-id qwen3.6-27b --max-context 8192 --kv-dtype int8 --mtp-draft-tokens 3 --lm-head-draft
+env:CUDA_VISIBLE_DEVICES=1
+llamacppdir: D:/llamacpp/ninfer-rtx3090-windows-x64-0.2.0-rtx3090-v2/ninfer-rtx3090-windows-x64-0.2.0-rtx3090-v2
 """
 
 
@@ -71,13 +76,14 @@ class ModelManager:
                 continue
 
             # A line is considered a model name if it's not a command
-            is_command = line.lower().startswith('llama-server')
+            is_command = line.lower().startswith('llama-server') or line.lower().startswith('ninfer-serve')
             is_env_line = line.lower().startswith('env:')
             is_dir_line = line.lower().startswith('llamacppdir:')
 
             if not is_command and not is_env_line and not is_dir_line:
                 # And the next line *is* a command
-                if (i + 1 < len(lines)) and lines[i + 1].strip().lower().startswith('llama-server'):
+                next_line = lines[i + 1].strip().lower() if (i + 1 < len(lines)) else ""
+                if next_line.startswith('llama-server') or next_line.startswith('ninfer-serve'):
                     current_model_name = line
             elif is_env_line and current_model_name:
                 # Capture env vars line (line 3: env:KEY=value)
@@ -255,9 +261,13 @@ class ModelManager:
                 if skip_next_line:
                     skip_next_line = False
                     continue
-                if line.strip() == model_name_to_delete:
+                stripped = line.strip()
+                if stripped == model_name_to_delete:
                     skip_next_line = True
                     found = True
+                    continue
+                # Also skip associated env: and llamacppdir: lines after the command
+                if found and (stripped.startswith('env:') or stripped.startswith('llamacppdir:' )):
                     continue
                 output_lines.append(line)
 

@@ -124,3 +124,9 @@ llama-server -m /path/to/models/Qwen3.5-35B-A3B-Q8_0.gguf --mmproj /path/to/mode
 
 Devstral-Small-macOS-Chat
 llama-server -m /path/to/models/Devstral-Small-2507-Q6_K.gguf --jinja -c 64000 -ngl 999 -fa on --temp 0.7 --top-k 64 --top-p 0.95 --min-p 0.05 --cache-type-k q8_0 --cache-type-v q8_0 --no-warmup
+
+ninfer_qwen3.6_27b
+ninfer-serve.exe --host 127.0.0.1 --port 8080 --model-id qwen3.6-27b --max-context 8192 --kv-dtype int8 --mtp-draft-tokens 3 --lm-head-draft
+env:CUDA_VISIBLE_DEVICES=1
+llamacppdir: D:/llamacpp/ninfer-rtx3090-windows-x64-0.2.0-rtx3090-v2/ninfer-rtx3090-windows-x64-0.2.0-rtx3090-v2
+

@@ -576,6 +576,53 @@ LLAMA_CPP_PARAMETERS = [
     }
 ]
 
+# NInfer (ninfer-serve) specific parameters
+# NInfer uses positional model path (no flag) — appears right after executable
+NINFER_PARAMETERS = [
+    {
+        "name": "File Paths",
+        "collapsed": False,
+        "parameters": [
+            {'name': 'Server Path', 'id': 'server-path', 'type': 'text', 'default': '', 'description': 'Path to ninfer-serve.exe without quotes', 'required': True, 'prefix': ''},
+            {'name': 'Model Path', 'id': 'model-path', 'type': 'text', 'default': '', 'description': 'Path to .ninfer model file (positional argument, no flag prefix)', 'required': True, 'prefix': '-m'},
+        ]
+    },
+    {
+        "name": "Server Parameters",
+        "collapsed": True,
+        "parameters": [
+            {'name': 'Host', 'id': 'host', 'type': 'text', 'default': '0.0.0.0', 'description': 'IP address to listen on (default: 0.0.0.0)', 'prefix': '--host'},
+            {'name': 'Port', 'id': 'port', 'type': 'number', 'default': '8080', 'description': 'Port to listen on (default: 8080)', 'prefix': '--port'},
+            {'name': 'Model ID', 'id': 'model-id', 'type': 'text', 'default': '', 'description': 'Alias/ID for the model in HTTP API (default: derived from model name)', 'prefix': '--model-id'},
+        ]
+    },
+    {
+        "name": "Context & Memory Parameters",
+        "collapsed": True,
+        "parameters": [
+            {'name': 'Max Context', 'id': 'max-context', 'type': 'number', 'default': '4096', 'description': 'Maximum context size (default: 4096)', 'prefix': '--max-context'},
+            {'name': 'Batch Size', 'id': 'batch-size', 'type': 'number', 'default': '2048', 'description': 'Batch size for processing (default: 2048)', 'prefix': '--batch-size'},
+            {'name': 'UBatch Size', 'id': 'ubatch-size', 'type': 'number', 'default': '512', 'description': 'Physical maximum batch size (default: 512)', 'prefix': '--ubatch-size'},
+            {'name': 'KV Dtype', 'id': 'kv-dtype', 'type': 'select', 'default': 'auto', 'options': ['auto', 'fp16', 'bf16', 'fp32', 'q8_0', 'q4_0'], 'description': 'Data type for KV cache (default: auto)', 'prefix': '--kv-dtype'},
+        ]
+    },
+    {
+        "name": "Threading & GPU Parameters",
+        "collapsed": True,
+        "parameters": [
+            {'name': 'Threads', 'id': 'threads', 'type': 'number', 'default': '-1', 'description': 'Number of threads to use (default: -1 = auto)', 'prefix': '--threads'},
+            {'name': 'GPU Layers', 'id': 'gpu-layers', 'type': 'number', 'default': '-1', 'description': 'Number of layers to offload to GPU (-1 = all)', 'prefix': '--gpu-layers'},
+        ]
+    },
+    {
+        "name": "Logging Parameters",
+        "collapsed": True,
+        "parameters": [
+            {'name': 'Verbose', 'id': 'verbose', 'type': 'checkbox', 'default': False, 'description': 'Enable verbose logging output', 'prefix': '--verbose'},
+        ]
+    },
+]
+
 BENCHMARK_PROMPT = '''
                 **Task:**  
 Create a ranked list of the provided LLM models from **fastest to slowest** based on their reported **tokens per second (t/s)**.  

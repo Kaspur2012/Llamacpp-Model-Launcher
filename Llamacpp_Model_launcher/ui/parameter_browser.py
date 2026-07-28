@@ -3,7 +3,7 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLineEdit, QScrollArea, QFrame,
                              QPushButton, QHBoxLayout, QLabel, QCheckBox, QComboBox)
 from PyQt6.QtCore import Qt, pyqtSignal
-from Llamacpp_Model_launcher.parameters_db import LLAMA_CPP_PARAMETERS
+from Llamacpp_Model_launcher.parameters_db import LLAMA_CPP_PARAMETERS, NINFER_PARAMETERS
 from .styles import PARAMETER_BROWSER_STYLES
 
 
@@ -43,7 +43,31 @@ class ParameterBrowser(QWidget):
         scroll_area.setWidget(scroll_content)
 
         self.browser_param_rows.clear()
+        self._is_ninfer_mode = False  # Default to Llama.cpp mode
         for group in LLAMA_CPP_PARAMETERS:
+            self._create_group_box(group)
+
+    def set_mode(self, is_ninfer: bool):
+        """Switch between Llama.cpp and NInfer parameter sets.
+        
+        Args:
+            is_ninfer: True to show NInfer parameters, False for Llama.cpp.
+        """
+        if self._is_ninfer_mode == is_ninfer:
+            return  # No change needed
+        
+        self._is_ninfer_mode = is_ninfer
+        self.browser_param_rows.clear()
+        
+        # Clear existing group boxes
+        while self.browser_layout.count():
+            child = self.browser_layout.takeAt(0).widget()
+            if child:
+                child.deleteLater()
+        
+        # Populate with the correct parameter set
+        params = NINFER_PARAMETERS if is_ninfer else LLAMA_CPP_PARAMETERS
+        for group in params:
             self._create_group_box(group)
 
     def _create_group_box(self, group_data):

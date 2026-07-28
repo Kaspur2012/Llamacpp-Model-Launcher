@@ -22,6 +22,7 @@ class RightPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._is_dirty = False
+        self._is_ninfer_model = False
         self._setup_ui()
 
     def _setup_ui(self):
@@ -161,12 +162,13 @@ class RightPanel(QWidget):
         button_layout.addWidget(save_button)
         layout.addLayout(button_layout)
 
-    def populate(self, command_parts: list[Parameter], model_name: str, env_vars=None, llamacpp_dir=None):
+    def populate(self, command_parts: list[Parameter], model_name: str, env_vars=None, llamacpp_dir=None, is_ninfer=False):
         """Clears and fills the editor with a new set of parameters.
 
         env_vars and llamacpp_dir default to None (leave as-is) so callers that
         forget to pass them won't silently wipe the user's input.
         """
+        self._is_ninfer_model = is_ninfer
         # Block signals on the container widget to prevent textChanged from firing
         self.param_widget.blockSignals(True)
         self.env_vars_input.blockSignals(True)
@@ -199,7 +201,7 @@ class RightPanel(QWidget):
     def _browse_file(self, line_edit, file_filter=None):
         """Helper to open file dialog and set line edit text."""
         if file_filter is None:
-            file_filter = "GGUF Files (*.gguf);;All Files (*)"
+            file_filter = "Model Files (*.gguf *.ninfer);;GGUF Files (*.gguf);;All Files (*)"
         path, _ = QFileDialog.getOpenFileName(self, "Select File", "", file_filter)
         if path:
             line_edit.setText(path)
@@ -208,27 +210,30 @@ class RightPanel(QWidget):
     def _is_file_path(value):
         """Detect if a value looks like a file or directory path.
         Returns ('file', filter) or ('dir',) or None."""
+        import os
         if not value or not isinstance(value, str):
             return None
         # Remove surrounding quotes if present
         clean = value.strip('"\'')
+        known_file_exts = {'.gguf', '.ggsuf', '.bin', '.safetensors', '.pth', '.ckpt', '.pt',
+                           '.onnx', '.ggml', '.json', '.txt', '.jinja', '.yaml', '.yml',
+                           '.ini', '.cfg', '.conf', '.xml', '.html', '.md', '.csv', '.log',
+                           '.dat', '.model', '.weights', '.ninfer'}
         # Windows absolute path (e.g., D:\path\to\file)
         if len(clean) >= 3 and clean[1:3] == ':\\' and clean[0].isalpha():
-            # Check if it looks like a file (has extension) or directory
-            lower = clean.lower()
-            if any(lower.endswith(ext) for ext in ('.gguf', '.ggsuf', '.bin', '.safetensors', '.pth', '.ckpt', '.pt', '.onnx', '.ggml', '.bin', '.wts', '.wts', '.json', '.txt', '.jinja', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.xml', '.html', '.md', '.csv', '.log', '.dat', '.model', '.weights', '.safetensors.index.json')):
+            _, ext = os.path.splitext(clean)
+            if ext.lower() in known_file_exts:
                 return ('file', clean)
             return ('dir',)
         # Unix absolute path
         if clean.startswith('/'):
-            lower = clean.lower()
-            if any(lower.endswith(ext) for ext in ('.gguf', '.ggsuf', '.bin', '.safetensors', '.pth', '.ckpt', '.pt', '.onnx', '.ggml', '.json', '.txt', '.jinja', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.xml', '.html', '.md', '.csv', '.log', '.dat', '.model', '.weights')):
+            _, ext = os.path.splitext(clean)
+            if ext.lower() in known_file_exts:
                 return ('file', clean)
             return ('dir',)
         # Relative path with extension
-        import os
         _, ext = os.path.splitext(clean)
-        if ext and ext.lower() in ('.gguf', '.ggsuf', '.bin', '.safetensors', '.pth', '.ckpt', '.pt', '.onnx', '.ggml', '.json', '.txt', '.jinja', '.yaml', '.yml', '.ini', '.cfg', '.conf', '.xml', '.html', '.md', '.csv', '.log', '.dat', '.model', '.weights'):
+        if ext and ext.lower() in known_file_exts:
             return ('file', clean)
         return None
 
@@ -246,8 +251,10 @@ class RightPanel(QWidget):
         # Determine file filter based on path extension
         def get_file_filter(path_value):
             if not path_value:
-                return "GGUF Files (*.gguf);;All Files (*)"
+                return "Model Files (*.gguf *.ninfer);;GGUF Files (*.gguf);;All Files (*)"
             lower = path_value.lower()
+            if lower.endswith('.ninfer'):
+                return "NInfer Models (*.ninfer);;All Files (*)"
             if lower.endswith('.gguf'):
                 return "GGUF Files (*.gguf);;All Files (*)"
             elif lower.endswith(('.jinja', '.txt', '.json')):
@@ -292,7 +299,15 @@ class RightPanel(QWidget):
         remove_button.clicked.connect(self._remove_parameter_row)
         field_layout.addWidget(remove_button)
 
-        self.param_layout.addRow(QLabel(param_key), field_container)
+        # Display label — show "Model Path (positional)" for NInfer's -m
+        display_label = param_key
+        if self._is_ninfer_model and param_key == '-m':
+            display_label = "Model Path (positional)"
+
+        label_widget = QLabel(display_label)
+        # Store the original key so get_parameters() can retrieve it
+        label_widget.setProperty("param_key", param_key)
+        self.param_layout.addRow(label_widget, field_container)
         return input_widget
 
     def _remove_parameter_row(self):
@@ -314,7 +329,9 @@ class RightPanel(QWidget):
 
         for i in range(self.param_layout.rowCount()):
             label_widget = self.param_layout.itemAt(i, QFormLayout.ItemRole.LabelRole).widget()
-            if label_widget.text() == param_name:
+            # Check against both stored key and display text
+            existing_key = label_widget.property("param_key") or label_widget.text()
+            if label_widget.text() == param_name or existing_key == param_name:
                 reply = QMessageBox.question(self, "Parameter Exists",
                                              f"Parameter '{param_name}' already exists. Add anyway?",
                                              QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -333,15 +350,17 @@ class RightPanel(QWidget):
         """Reads all parameters from the editor and returns them as a list."""
         params = []
         for i in range(self.param_layout.rowCount()):
-            label = self.param_layout.itemAt(i, QFormLayout.ItemRole.LabelRole).widget().text()
+            label_widget = self.param_layout.itemAt(i, QFormLayout.ItemRole.LabelRole).widget()
+            # Use the stored original key (e.g. "-m") instead of display text (e.g. "Model Path (positional)")
+            param_key = label_widget.property("param_key") or label_widget.text()
             field_widget = self.param_layout.itemAt(i, QFormLayout.ItemRole.FieldRole).widget()
             input_widget = field_widget.layout().itemAt(0).widget()
 
             if isinstance(input_widget, QCheckBox):
                 if input_widget.isChecked():
-                    params.append(Parameter(label, None))
+                    params.append(Parameter(param_key, None))
             elif isinstance(input_widget, QLineEdit):
-                params.append(Parameter(label, input_widget.text().strip()))
+                params.append(Parameter(param_key, input_widget.text().strip()))
         return params
 
     def get_model_name(self) -> str:

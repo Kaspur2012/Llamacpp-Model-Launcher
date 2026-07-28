@@ -17,7 +17,7 @@ from Llamacpp_Model_launcher.core import (
     CommandBuilder,
     Parameter
 )
-from Llamacpp_Model_launcher.core.platform_utils import IS_WINDOWS, IS_MACOS, get_executable_name, get_default_model_path_example, kill_process_tree
+from Llamacpp_Model_launcher.core.platform_utils import IS_WINDOWS, IS_MACOS, get_executable_name, get_default_model_path_example, kill_process_tree, is_ninfer_command, is_ninfer_params
 from Llamacpp_Model_launcher.core.workers import ApiRequestWorker, StabilityRequestWorker
 
 from Llamacpp_Model_launcher.system_analyzer import SystemAnalyzer
@@ -667,7 +667,10 @@ class MainWindow(QWidget):
         command_parts = self.command_builder.parse(command_str)
         llamacpp_dirs = self.model_manager._get_model_llamacppdirs()
         model_dir = llamacpp_dirs.get(current_name, "")
-        self.right_panel.populate(command_parts, current_name, self.current_model_env_vars, model_dir)
+        is_ninfer = is_ninfer_command(command_str)
+        self.right_panel.populate(command_parts, current_name, self.current_model_env_vars, model_dir, is_ninfer=is_ninfer)
+        # Update parameter browser for NInfer vs Llama.cpp
+        self._update_parameter_browser_for_model(command_parts)
 
     def model_selected(self, index):
         self.analysis_results = None
@@ -707,6 +710,23 @@ class MainWindow(QWidget):
         llamacpp_dirs = self.model_manager._get_model_llamacppdirs()
         self.current_model_llamacppdir = llamacpp_dirs.get(model_name, "")
         self.right_panel.set_llamacpp_dir(self.current_model_llamacppdir)
+
+    def _update_parameter_browser_for_model(self, command_parts):
+        """Switch the parameter browser between Llama.cpp and NInfer parameter sets."""
+        is_ninfer = is_ninfer_params(command_parts)
+        self.left_panel.parameter_browser.set_mode(is_ninfer)
+        # Enable/disable tuning wizard button based on model type
+        if is_ninfer:
+            self.left_panel.tuning_wizard_button.setEnabled(False)
+            self.left_panel.tuning_wizard_button.setToolTip("Tuning Wizard is not available for NInfer models")
+        else:
+            self.left_panel.tuning_wizard_button.setEnabled(True)
+            self.left_panel.tuning_wizard_button.setToolTip("")
+
+    def _is_current_ninfer(self) -> bool:
+        """Check if the currently loaded model is an NInfer model."""
+        params = self.right_panel.get_parameters()
+        return is_ninfer_params(params)
 
     def add_parameter_from_browser(self, param_data, input_widget):
         value = None
@@ -760,7 +780,8 @@ class MainWindow(QWidget):
         new_name = self.right_panel.get_model_name()
         if not new_name: QMessageBox.warning(self, "Input Error", "Model name cannot be empty."); return
         params_from_editor = self.right_panel.get_parameters()
-        new_command = self.command_builder.build(params_from_editor)
+        is_ninfer = is_ninfer_params(params_from_editor)
+        new_command = self.command_builder.build(params_from_editor, is_ninfer=is_ninfer)
         env_vars_text = self.right_panel.get_env_vars()
         old_name = ""
         if not self.is_editing_new_model and self.previous_model_index != -1:
@@ -793,7 +814,8 @@ class MainWindow(QWidget):
         self.is_editing_new_model = True
         self.left_panel.set_dropdown_index(-1)
         current_params = self.right_panel.get_parameters()
-        self.right_panel.populate(current_params, new_name, self.current_model_env_vars, self.current_model_llamacppdir)
+        is_ninfer = is_ninfer_params(current_params)
+        self.right_panel.populate(current_params, new_name, self.current_model_env_vars, self.current_model_llamacppdir, is_ninfer=is_ninfer)
         # env vars carried over automatically
 
     def update_auto_open_visibility(self):
@@ -974,7 +996,8 @@ class MainWindow(QWidget):
         effective_dir = self.right_panel.get_llamacpp_dir() or self.llamacpp_dir
         if not effective_dir: QMessageBox.warning(self, "Warning", "Set the Llama.cpp directory first."); return
         params_from_editor = self.right_panel.get_parameters()
-        command_str = self.command_builder.build(params_from_editor)
+        is_ninfer = is_ninfer_params(params_from_editor)
+        command_str = self.command_builder.build(params_from_editor, is_ninfer=is_ninfer)
         if not command_str: QMessageBox.warning(self, "Warning", "Command is empty."); return
 
         # --- FIX: Reset KV capture list for new run ---
@@ -984,10 +1007,12 @@ class MainWindow(QWidget):
         if not self.wizard_generator: self.left_panel.clear_output();
         self.left_panel.append_output(log_msg)
         print(f"\n[DIAGNOSTICS] LAUNCHING SERVER\n[DIAGNOSTICS] > {command_str}\n")
-        if not self.left_panel.webui_checkbox.isChecked() and '--no-webui' not in command_str:
-            command_str += ' --no-webui'
-        else:
-            command_str = re.sub(r'\s+--no-webui\b', '', command_str)
+        # Only auto-append --no-webui for Llama.cpp models (NInfer doesn't support it)
+        if not is_ninfer:
+            if not self.left_panel.webui_checkbox.isChecked() and '--no-webui' not in command_str:
+                command_str += ' --no-webui'
+            else:
+                command_str = re.sub(r'\s+--no-webui\b', '', command_str)
         self.process = QProcess()
         self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.process.readyReadStandardOutput.connect(self.handle_stdout)
@@ -1210,6 +1235,13 @@ class MainWindow(QWidget):
         self.left_panel.append_output("=" * 30 + " Starting System Analysis " + "=" * 30)
         self.analysis_results = None
         current_params = {p.key: p.value for p in self.right_panel.get_parameters()}
+        # Block tuning wizard for NInfer models
+        if is_ninfer_params(self.right_panel.get_parameters()):
+            QMessageBox.information(self, "NInfer Model",
+                                    "The Tuning Wizard is not available for NInfer models.\n\n"
+                                    "NInfer uses a fixed optimized pipeline — configure parameters directly in the editor.")
+            self._cancel_tuning_wizard()
+            return
         model_path = current_params.get('-m', current_params.get('--model'))
         if "Executable" not in current_params or not model_path:
             QMessageBox.critical(self, "Prerequisite Missing",

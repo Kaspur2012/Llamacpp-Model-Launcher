@@ -28,6 +28,21 @@ def get_subprocess_kwargs():
     return {}
 
 
+def is_ninfer_command(command_str: str) -> bool:
+    """Check if a command string uses the NInfer inference engine."""
+    if not command_str:
+        return False
+    return 'ninfer-serve' in command_str.lower()
+
+
+def is_ninfer_params(params) -> bool:
+    """Check if a list of Parameter tuples represents an NInfer command."""
+    for param in params:
+        if param.key == "Executable" and 'ninfer-serve' in param.value.lower():
+            return True
+    return False
+
+
 def kill_process_tree(pid):
     """Terminates a process and its children. Platform-specific implementation."""
     if IS_WINDOWS:

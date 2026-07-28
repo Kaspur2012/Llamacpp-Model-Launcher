@@ -85,7 +85,8 @@ class CommandBuilder:
     def parse(command_str: str) -> list[Parameter]:
         """
         Parses a full command string into a list of Parameter tuples.
-        Handles complex paths by identifying the .gguf file.
+        Handles complex paths by identifying the .gguf or .ninfer file.
+        For NInfer commands, detects the positional model path (token after executable).
         """
         if not command_str:
             return []
@@ -93,9 +94,8 @@ class CommandBuilder:
         parts = []
         prefix_str, suffix_str = "", command_str
 
-        # Special handling for Windows paths in GGUF files which may contain spaces
-        # and break parsing if not handled separately.
-        path_matches = list(re.finditer(r'\S+\.gguf', command_str, re.IGNORECASE))
+        # Special handling for Windows paths in GGUF/NInfer files which may contain spaces
+        path_matches = list(re.finditer(r'\S+\.(gguf|ninfer)', command_str, re.IGNORECASE))
         if path_matches:
             # Find the last match, which is most likely the main model path
             last_match = path_matches[-1]
@@ -111,9 +111,18 @@ class CommandBuilder:
             return []
 
         # The first token is always the executable
-        parts.append(Parameter("Executable", all_tokens[0]))
+        executable = all_tokens[0]
+        parts.append(Parameter("Executable", executable))
+
+        # Detect if this is an NInfer command
+        is_ninfer = 'ninfer-serve' in executable.lower()
 
         i = 1
+        if is_ninfer and i < len(all_tokens):
+            # For NInfer, the first token after executable is the positional model path
+            parts.append(Parameter('-m', all_tokens[i]))
+            i += 1
+
         while i < len(all_tokens):
             token = all_tokens[i]
             if token.startswith('-'):
@@ -131,24 +140,41 @@ class CommandBuilder:
         return parts
 
     @staticmethod
-    def build(parameters: list[Parameter]) -> str:
+    def build(parameters: list[Parameter], is_ninfer: bool = False) -> str:
         """
         Reconstructs a command string from a list of Parameter tuples.
+        
+        For NInfer models, the Model Path (-m) is placed positionally (right after
+        the executable, no flag prefix). For Llama.cpp models, -m is used normally.
         """
         args_list = []
         executable = ""
+        positional_model_path = None
+        remaining_params = []
+        
         for param in parameters:
             if param.key == "Executable":
                 executable = param.value
                 continue
+            # For NInfer, extract the model path as positional arg
+            # Accept both '-m' and 'Model Path (positional)' for backwards compat
+            if is_ninfer and param.key in ('-m', 'Model Path (positional)'):
+                positional_model_path = param.value
+                continue
+            remaining_params.append(param)
 
+        # Build the args list
+        if executable:
+            args_list.append(executable)
+        
+        # For NInfer, model path comes positionally right after executable
+        if is_ninfer and positional_model_path is not None:
+            args_list.append(positional_model_path)
+        
+        for param in remaining_params:
             args_list.append(param.key)
             if param.value is not None:
                 args_list.append(param.value)
-
-        # Prepend the executable to the argument list for proper command line generation
-        if executable:
-            args_list.insert(0, executable)
 
         if not args_list:
             return ""
