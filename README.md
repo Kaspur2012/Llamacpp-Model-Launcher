@@ -279,6 +279,16 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 ##   Change Log
 
+*   08/16/2026 -
+    *   **Critical fix: per-model Environment Variables lost on save** — typed an env var (e.g. `MTMD_BACKEND_DEVICE=cuda1`), saved, exited, and it was gone on reopen. Affected every profile.
+        *   Root cause: `save_model()` located the write position for the `env:` line with `lines.index(new_command)`, which finds the *first* matching command in the file. Whenever two profiles shared an identical command (what happens after **Duplicate** + rename), the env line was written into the *other* profile's block and yours never received it.
+        *   Fix: use the index of the model block that was actually found instead of re-searching the file
+    *   **Environment variables now work on all platforms** — previously injected via raw `set KEY=value` lines in a temp `.bat` file (Windows-only, and unsanitized user text = command-injection risk). Now applied via `QProcessEnvironment` on both platforms, with a validator that rejects lines whose key is not a valid env variable identifier
+    *   **Tuning Wizard benchmarks the right server** — the wizard's API requests were hardcoded to `127.0.0.1:8080`; now reads the model's actual `--host`/`--port` from its command
+    *   **More robust parameter row reading** — `get_parameters()` no longer assumes the input widget is at layout index 0; input widgets are tagged with an `is_param_input` property instead
+
+    > 🤖 All changes implemented by [pi](https://pi.dev)
+
 *   07/28/2026 -
     *   **NInfer inference engine support** — full integration of `ninfer-serve.exe` alongside Llama.cpp models
         *   Dual-engine support: recognizes both `llama-server.exe` and `ninfer-serve.exe` as valid executables

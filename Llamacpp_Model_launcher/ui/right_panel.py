@@ -285,6 +285,10 @@ class RightPanel(QWidget):
             input_widget = QLineEdit(param_value)
             field_layout.addWidget(input_widget)
 
+        # Tag the actual input widget so get_parameters() can find it reliably
+        # instead of assuming it's always the first item in the container layout.
+        input_widget.setProperty("is_param_input", True)
+
         # Signals are now connected unconditionally
         if isinstance(input_widget, QLineEdit):
             input_widget.textChanged.connect(self._mark_as_dirty)
@@ -346,6 +350,27 @@ class RightPanel(QWidget):
         self.new_param_value_input.clear()
         self._mark_as_dirty()
 
+    @staticmethod
+    def _find_param_input_widget(field_widget):
+        """Locates the tagged input widget inside a parameter row's field container.
+
+        Uses the "is_param_input" property set in add_parameter_row() instead of
+        assuming the input is always at layout index 0 — keeps this resilient to
+        future changes in row layout (icons, warning labels, etc. added before it).
+        """
+        layout = field_widget.layout()
+        if layout is None:
+            return None
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            widget = item.widget() if item else None
+            if widget is not None and widget.property("is_param_input"):
+                return widget
+        # Fallback for safety: behave like the old code if nothing was tagged
+        # (shouldn't happen for rows created via add_parameter_row).
+        first_item = layout.itemAt(0) if layout.count() > 0 else None
+        return first_item.widget() if first_item else None
+
     def get_parameters(self) -> list[Parameter]:
         """Reads all parameters from the editor and returns them as a list."""
         params = []
@@ -354,7 +379,7 @@ class RightPanel(QWidget):
             # Use the stored original key (e.g. "-m") instead of display text (e.g. "Model Path (positional)")
             param_key = label_widget.property("param_key") or label_widget.text()
             field_widget = self.param_layout.itemAt(i, QFormLayout.ItemRole.FieldRole).widget()
-            input_widget = field_widget.layout().itemAt(0).widget()
+            input_widget = self._find_param_input_widget(field_widget)
 
             if isinstance(input_widget, QCheckBox):
                 if input_widget.isChecked():

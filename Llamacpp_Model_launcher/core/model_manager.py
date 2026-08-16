@@ -208,7 +208,14 @@ class ModelManager:
                 if not found:
                     return False, f"Could not find original model '{old_name}' to update."
 
-                base_idx = lines.index(new_command + '\n') + 1
+                # FIX: Use the index we already located (i) instead of re-searching the
+                # file for new_command via list.index(). The old approach found the
+                # FIRST occurrence of an identical command string anywhere in the file,
+                # which silently corrupted the wrong model's block whenever two models
+                # happened to share the exact same command text. lines[i] is the name
+                # line and lines[i + 1] is the (just-updated) command line, so the next
+                # line to insert env/dir metadata after is i + 2.
+                base_idx = i + 2
 
                 # Update or add env vars line
                 if env_vars_text:

@@ -8,7 +8,7 @@ import webbrowser
 import re
 from PyQt6.QtWidgets import (QWidget, QHBoxLayout, QSplitter, QFileDialog,
                              QMessageBox, QCheckBox, QComboBox, QLineEdit, QApplication)
-from PyQt6.QtCore import QProcess, Qt, QTimer, QObject, QThread, pyqtSignal
+from PyQt6.QtCore import QProcess, QProcessEnvironment, Qt, QTimer, QObject, QThread, pyqtSignal
 
 from Llamacpp_Model_launcher.core import (
     ServerStatus,
@@ -1018,22 +1018,34 @@ class MainWindow(QWidget):
         self.process.readyReadStandardOutput.connect(self.handle_stdout)
         self.process.finished.connect(self.process_finished)
         self.process.setWorkingDirectory(effective_dir)
+
+        # Build the process environment (system env + any per-model KEY=value overrides)
+        # on BOTH platforms. Previously env vars were only applied on Windows, by writing
+        # them as raw 'set' lines into a .bat file — that silently did nothing on
+        # macOS/Linux, and injecting unsanitized user text into batch-file syntax was
+        # also a command-injection risk (a shared models.txt could smuggle extra shell
+        # commands via a crafted env: line). Using QProcessEnvironment passes each
+        # KEY=value as a real environment variable instead of interpreted shell text.
+        env_vars_text = self.right_panel.get_env_vars()
+        invalid_env_lines = []
+        process_env = QProcessEnvironment.systemEnvironment()
+        for key, value in self._parse_env_vars_text(env_vars_text, invalid_env_lines):
+            process_env.insert(key, value)
+        if invalid_env_lines:
+            self.left_panel.append_output(
+                "[WARNING] Ignored invalid environment variable line(s): " +
+                ", ".join(invalid_env_lines)
+            )
+        self.process.setProcessEnvironment(process_env)
+
         if IS_WINDOWS:
             try:
                 temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.bat', delete=False, encoding='utf-8')
                 self.temp_batch_file = temp_file.name
+                # No longer write 'set KEY=value' lines here — environment variables are
+                # now injected via QProcessEnvironment above. The batch file only exists
+                # to give QProcess a stable, path-safe entry point for the command line.
                 temp_file.write('@echo off\n')
-                # Inject environment variables (e.g., MTMD_BACKEND_DEVICE=cuda1)
-                env_vars_text = self.right_panel.get_env_vars()
-                if env_vars_text:
-                    for env_line in env_vars_text.split('\n'):
-                        env_line = env_line.strip()
-                        if not env_line or '=' not in env_line:
-                            continue
-                        # Strip leading 'set ' if user already typed it
-                        if env_line.lower().startswith('set '):
-                            env_line = env_line[4:].strip()
-                        temp_file.write(f'set {env_line}\n')
                 temp_file.write(command_str)
                 temp_file.close()
             except Exception as e:
@@ -1047,6 +1059,35 @@ class MainWindow(QWidget):
             self.process.start(program, args)
         self.left_panel.set_status(ServerStatus.LOADING);
         self.update_button_states()
+
+    @staticmethod
+    def _parse_env_vars_text(env_vars_text, invalid_lines=None):
+        """Parses the per-model 'Environment Variables' textbox into (key, value) pairs.
+
+        Accepts lines of the form KEY=value, optionally prefixed with 'set ' (in case
+        a user pastes a Windows-style line). Rejects/flags keys that aren't valid
+        environment variable identifiers, as defense-in-depth against stray shell
+        metacharacters ending up anywhere near process launch.
+        """
+        pairs = []
+        if not env_vars_text:
+            return pairs
+        env_key_pattern = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+        for raw_line in env_vars_text.split('\n'):
+            env_line = raw_line.strip()
+            if not env_line or '=' not in env_line:
+                continue
+            if env_line.lower().startswith('set '):
+                env_line = env_line[4:].strip()
+            key, _, value = env_line.partition('=')
+            key = key.strip()
+            value = value.strip()
+            if not env_key_pattern.match(key):
+                if invalid_lines is not None:
+                    invalid_lines.append(raw_line.strip())
+                continue
+            pairs.append((key, value))
+        return pairs
 
     def flush_output_buffer(self):
         if not self.output_buffer:
@@ -1293,7 +1334,11 @@ class MainWindow(QWidget):
 
         final_params_list = self.right_panel.get_parameters()
         final_params_dict = {p.key: p.value for p in final_params_list}
-        self.wizard = TuningWizard(self.analysis_results, final_params_dict)
+        # Use the model's actual configured --host/--port (not a hardcoded default) so
+        # the wizard's benchmark requests hit the right server.
+        wizard_host, wizard_port = self.get_server_address_from_command()
+        self.wizard = TuningWizard(self.analysis_results, final_params_dict,
+                                   host=wizard_host, port=wizard_port)
         self.wizard_generator = self.wizard.run_tuning_wizard()
         self._advance_wizard()
 

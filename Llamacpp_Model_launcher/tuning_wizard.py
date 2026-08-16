@@ -21,13 +21,18 @@ class TuningWizard:
     MATH_ESTIMATION_SAFETY_MARGIN = 0.35
     SYSTEM_SAFETY_BUFFER_GB = 0.5
 
-    def __init__(self, analysis_results, initial_params):
+    def __init__(self, analysis_results, initial_params, host='127.0.0.1', port='8080'):
         self.analysis = analysis_results
         self.initial_params = initial_params
         self.ensure_safe_overhead = True  # Default to True until user chooses
         self.best_config = {'params': {}, 'tps': 0.0}
         self.primary_gpu_id = 0  # Will be updated by user choice
         self.base_params = {}  # Will be built dynamically
+        # Server address to benchmark against. Must reflect the model's actual
+        # --host/--port (they default to 127.0.0.1:8080 but are user-configurable),
+        # otherwise benchmark requests silently target the wrong server.
+        self.host = host or '127.0.0.1'
+        self.port = port or '8080'
 
     def _calculate_dynamic_timeout(self, test_type='benchmark'):
         """Calculates a dynamic timeout in milliseconds based on model size."""
@@ -1426,9 +1431,10 @@ class TuningWizard:
         return ordered_proportions
 
     def run_api_benchmark_requests(self):
+        url = f"http://{self.host}:{self.port}/v1/chat/completions"
         for i in range(3):
             try:
-                requests.post("http://127.0.0.1:8080/v1/chat/completions",
+                requests.post(url,
                               json={"messages": [{"role": "user", "content": BENCHMARK_PROMPT}], "n_predict": 512,
                                     "temperature": 0.1, "seed": 1}, timeout=120)
                 if i < 2: time.sleep(2)
@@ -1437,8 +1443,9 @@ class TuningWizard:
                 pass
 
     def run_stability_api_request(self):
+        url = f"http://{self.host}:{self.port}/v1/chat/completions"
         try:
-            requests.post("http://127.0.0.1:8080/v1/chat/completions",
+            requests.post(url,
                           json={"messages": [{"role": "user", "content": BENCHMARK_PROMPT}], "n_predict": 50,
                                 "temperature": 0.1, "seed": 1}, timeout=300)
         except requests.RequestException as e:
