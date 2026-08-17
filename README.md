@@ -287,7 +287,7 @@ You can create your own model_file.txt from scratch or save the model_file_examp
     *   **Tuning Wizard benchmarks the right server** — the wizard's API requests were hardcoded to `127.0.0.1:8080`; now reads the model's actual `--host`/`--port` from its command
     *   **More robust parameter row reading** — `get_parameters()` no longer assumes the input widget is at layout index 0; input widgets are tagged with an `is_param_input` property instead
 
-    > 🤖 All changes implemented by [pi](https://pi.dev)
+    > 🤖 All changes implemented by [pi](https://pi.dev) with Qwen 3.8 27B Q5 K XL
 
 *   07/28/2026 -
     *   **NInfer inference engine support** — full integration of `ninfer-serve.exe` alongside Llama.cpp models
