@@ -286,7 +286,7 @@ You can create your own model_file.txt from scratch or save the model_file_examp
     *   **NInfer: Image Max Tokens parameter** — the NInfer parameter editor gained a **Vision Parameters** section with `--image-max-tokens`. Once you upgrade to a NInfer build that supports the flag (0.6.2), set it to cap vision tokens per image so large screenshots are downscaled server-side (like llama.cpp) instead of tripping the attention-pairs budget with a 413. Recommended: 1024. The current 0.6.1 binary rejects the flag, so don't add it until the new binary is in place
     *   Release EXE is `run_app_v055.exe` (versioned name so the running `run_app.exe` could keep working during the upgrade)
 
-    > 🤖 All changes implemented by [pi](https://pi.dev)
+    > 🤖 All changes implemented by [pi](https://pi.dev) with Qwen 3.8 27B Q5 K XL
 
 *   08/16/2026 -
     *   **Critical fix: per-model Environment Variables lost on save** — typed an env var (e.g. `MTMD_BACKEND_DEVICE=cuda1`), saved, exited, and it was gone on reopen. Affected every profile.
