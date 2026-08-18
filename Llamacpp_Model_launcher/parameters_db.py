@@ -615,6 +615,13 @@ NINFER_PARAMETERS = [
         ]
     },
     {
+        "name": "Vision Parameters",
+        "collapsed": True,
+        "parameters": [
+            {'name': 'Image Max Tokens', 'id': 'image-max-tokens', 'type': 'number', 'default': '', 'description': 'Maximum vision tokens per image; downscales larger images (default: use the model artifact embedded setting). Requires the NInfer binary built with the --image-max-tokens flag (0.6.2); the 0.6.1 binary rejects it. Recommended: 1024 (1M px, ~8 large screenshots per request)', 'prefix': '--image-max-tokens'},
+        ]
+    },
+    {
         "name": "Logging Parameters",
         "collapsed": True,
         "parameters": [

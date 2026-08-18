@@ -279,6 +279,15 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 ##   Change Log
 
+*   08/18/2026 -
+    *   **Critical fix: deleting a profile wiped the env vars of other profiles** — after deleting any profile, most of the *other* profiles lost their environment variables and had to be re-added/saved manually.
+        *   Root cause: `delete_model()` kept a `found` flag true for the rest of the file and skipped **every** `env:`/`llamacppdir:` line appearing after the deleted profile — including the ones belonging to unrelated profiles below it
+        *   Fix: delete only the target model's own block (name line + command line + the env/dir lines immediately following that command); nothing else in the file is touched
+    *   **NInfer: Image Max Tokens parameter** — the NInfer parameter editor gained a **Vision Parameters** section with `--image-max-tokens`. Once you upgrade to a NInfer build that supports the flag (0.6.2), set it to cap vision tokens per image so large screenshots are downscaled server-side (like llama.cpp) instead of tripping the attention-pairs budget with a 413. Recommended: 1024. The current 0.6.1 binary rejects the flag, so don't add it until the new binary is in place
+    *   Release EXE is `run_app_v055.exe` (versioned name so the running `run_app.exe` could keep working during the upgrade)
+
+    > 🤖 All changes implemented by [pi](https://pi.dev)
+
 *   08/16/2026 -
     *   **Critical fix: per-model Environment Variables lost on save** — typed an env var (e.g. `MTMD_BACKEND_DEVICE=cuda1`), saved, exited, and it was gone on reopen. Affected every profile.
         *   Root cause: `save_model()` located the write position for the `env:` line with `lines.index(new_command)`, which finds the *first* matching command in the file. Whenever two profiles shared an identical command (what happens after **Duplicate** + rename), the env line was written into the *other* profile's block and yours never received it.

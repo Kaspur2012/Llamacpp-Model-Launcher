@@ -261,26 +261,36 @@ class ModelManager:
             with open(self.models_file_path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
 
-            output_lines = []
-            skip_next_line = False
-            found = False
-            for line in lines:
-                if skip_next_line:
-                    skip_next_line = False
-                    continue
-                stripped = line.strip()
-                if stripped == model_name_to_delete:
-                    skip_next_line = True
-                    found = True
-                    continue
-                # Also skip associated env: and llamacppdir: lines after the command
-                if found and (stripped.startswith('env:') or stripped.startswith('llamacppdir:' )):
-                    continue
-                output_lines.append(line)
-
-            if not found:
+            n = len(lines)
+            # Find the model name line (exact match).
+            name_idx = None
+            for i, line in enumerate(lines):
+                if line.strip() == model_name_to_delete:
+                    name_idx = i
+                    break
+            if name_idx is None:
                 return False, f"Model '{model_name_to_delete}' not found in file."
 
+            # Delete ONLY this model's own block: the name line, its command line,
+            # and the env:/llamacppdir: metadata lines that immediately follow the
+            # command. (The previous implementation kept a `found` flag true for the
+            # rest of the file and deleted EVERY env:/llamacppdir: line after the
+            # deleted model, silently stripping env vars from unrelated profiles.)
+            start = name_idx
+            end = name_idx + 1  # at minimum, the name line itself
+            if end < n:
+                next_lower = lines[end].strip().lower()
+                if next_lower.startswith('llama-server') or next_lower.startswith('ninfer-serve'):
+                    end += 1  # include the command line
+                    # Include env:/llamacppdir: lines belonging to this block only
+                    while end < n:
+                        s = lines[end].strip().lower()
+                        if s.startswith('env:') or s.startswith('llamacppdir:'):
+                            end += 1
+                        else:
+                            break
+
+            output_lines = lines[:start] + lines[end:]
             with open(self.models_file_path, 'w', encoding='utf-8') as f:
                 f.writelines(output_lines)
 
