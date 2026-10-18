@@ -297,7 +297,7 @@ You can create your own model_file.txt from scratch or save the model_file_examp
         *   **Web UI checkboxes** are restored after the Tuning Wizard finishes; `stateChanged` → `toggled(bool)` signal wiring (stable across Qt builds); removed a broken `check.png` style reference
         *   **Output log is bounded** (~200 K chars, trimmed on line boundaries) so long server runs stay fast
     *   Release EXE is `run_app.exe` (rebuilt in `dist\`)
-	*	Note: the example for strata is my own which I have ngram to ram because I have enough ram to do so. If you do not, make sure to change it so it load to ssd. Though by loading your json, it should load all your current config.
+	*	Note: the example for strata is my own which I have ngram to ram because I have enough ram to do so. If you do not, make sure to change it so it load to ssd. Though by loading your json, it should load all your current config. Also, Strata default is greedy sampling, I just created 		a non grredy just to have the recommended sampling settings from qwen.
 
     > 🤖 All changes implemented by Deekseek Harness with Qwen3.8-Flash-Next IQ3_S (running Strata on this launcher)
 
