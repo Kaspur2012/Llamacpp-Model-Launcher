@@ -57,7 +57,10 @@ class LeftPanel(QWidget):
         options_layout = QHBoxLayout()
         self.webui_checkbox = QCheckBox('Enable Web UI')
         self.webui_checkbox.setChecked(True)
-        self.webui_checkbox.stateChanged.connect(lambda state: self.webui_toggled.emit(state == 2))
+        # toggled(bool) instead of stateChanged: stateChanged delivers a
+        # CheckState whose int value differs between Qt builds, while toggled
+        # always delivers a plain bool.
+        self.webui_checkbox.toggled.connect(self.webui_toggled)
         self.open_on_load_checkbox = QCheckBox('Auto-Open Web UI')
         self.open_on_load_checkbox.setChecked(True)
         options_layout.addWidget(self.webui_checkbox)
@@ -102,6 +105,7 @@ class LeftPanel(QWidget):
 
         self.view_stack = QStackedWidget()
         self.output_viewer = QTextEdit()
+        self._log_chars = 0  # approximate size of the output document
         self.output_viewer.setReadOnly(True)
         self.output_viewer.setFont(QFont('Menlo', 10))
         self.parameter_browser = ParameterBrowser()
@@ -128,6 +132,9 @@ class LeftPanel(QWidget):
     def set_tuning_mode(self, is_tuning):
         self._is_tuning = is_tuning
         if is_tuning:
+            # Remember the user's preferences so they can be restored after tuning
+            self._pre_tuning_webui = self.webui_checkbox.isChecked()
+            self._pre_tuning_auto_open = self.open_on_load_checkbox.isChecked()
             self.webui_checkbox.setChecked(False)
             self.open_on_load_checkbox.setChecked(False)
             self.tuning_wizard_button.setText("Cancel Tuning")
@@ -138,6 +145,10 @@ class LeftPanel(QWidget):
         else:
             self.tuning_wizard_button.setText("Tune Model")
             self.tuning_wizard_button.setStyleSheet("font-weight: bold;")
+            # Restore the Web UI checkboxes to the state they had before tuning
+            if hasattr(self, '_pre_tuning_webui'):
+                self.webui_checkbox.setChecked(self._pre_tuning_webui)
+                self.open_on_load_checkbox.setChecked(self._pre_tuning_auto_open)
             # The regular enabled state is restored by update_button_states
 
     def _set_view(self, index):
@@ -224,12 +235,38 @@ class LeftPanel(QWidget):
         self.model_dropdown.setCurrentIndex(index)
         self.model_dropdown.blockSignals(False)
 
+    # Keep the output viewer bounded: once the document grows past this many
+    # paragraphs, trim the oldest ones so long server runs don't grow the
+    # document (and its reflow cost) without limit.
+    MAX_LOG_BLOCKS = 2000
+
+    # Keep the output viewer bounded: long server runs used to grow the
+    # document without limit, slowing it down. Once the text grows past the
+    # cap, rebuild it keeping only the most recent portion (on a line
+    # boundary), so the cost stays flat.
+    MAX_LOG_CHARS = 200_000
+    TRIM_TARGET = 100_000
+
     def append_output(self, text):
         scrollbar = self.output_viewer.verticalScrollBar()
         was_at_bottom = scrollbar.value() >= (scrollbar.maximum() - 20)
         old_value = scrollbar.value()
 
         self.output_viewer.append(text)
+        self._log_chars += len(text)
+
+        if self._log_chars > self.MAX_LOG_CHARS:
+            plain = self.output_viewer.toPlainText()
+            start = max(0, len(plain) - self.TRIM_TARGET)
+            nl = plain.find('\n', start)
+            if nl != -1:
+                start = nl + 1  # cut on a line boundary
+            self.output_viewer.setPlainText(plain[start:])
+            self._log_chars = max(0, len(plain) - start)
+            # The document shrank; restore only the "stick to bottom" position
+            if was_at_bottom:
+                scrollbar.setValue(scrollbar.maximum())
+            return
 
         if was_at_bottom:
             scrollbar.setValue(scrollbar.maximum())
@@ -237,6 +274,7 @@ class LeftPanel(QWidget):
             scrollbar.setValue(old_value)
 
     def clear_output(self):
+        self._log_chars = 0
         self.output_viewer.clear()
 
     def show_output_view(self):

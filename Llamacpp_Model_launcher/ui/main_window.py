@@ -3,7 +3,6 @@
 import os
 import shlex
 import subprocess
-import tempfile
 import webbrowser
 import re
 from PyQt6.QtWidgets import (QWidget, QHBoxLayout, QSplitter, QFileDialog,
@@ -17,7 +16,13 @@ from Llamacpp_Model_launcher.core import (
     CommandBuilder,
     Parameter
 )
-from Llamacpp_Model_launcher.core.platform_utils import IS_WINDOWS, IS_MACOS, get_executable_name, get_default_model_path_example, kill_process_tree, is_ninfer_command, is_ninfer_params
+from Llamacpp_Model_launcher.core.platform_utils import (IS_WINDOWS, IS_MACOS, get_executable_name,
+                                                         get_default_model_path_example, kill_process_tree,
+                                                         is_ninfer_command, is_ninfer_params,
+                                                         is_strata_command, is_strata_params,
+                                                         port_in_use, enable_large_page_privileges,
+                                                         regenerate_greedy_config, strata_full_stop)
+from Llamacpp_Model_launcher.core.strata_config import save_config
 from Llamacpp_Model_launcher.core.workers import ApiRequestWorker, StabilityRequestWorker
 
 from Llamacpp_Model_launcher.system_analyzer import SystemAnalyzer
@@ -34,12 +39,15 @@ class MainWindow(QWidget):
         self.config_file = 'config.ini'
         self.llamacpp_dir = ''
         self.models_file = ''
-        self.temp_batch_file = ''
         self.is_editing_new_model = False
         self.is_dirty = False
         self.previous_model_index = -1
         self.current_model_env_vars = ""  # env vars for the currently selected model
         self.current_model_llamacppdir = ""  # per-model llamacpp directory override
+        # Strata bookkeeping: set at launch, used by the STOP-STRATA-equivalent unload
+        self._loaded_is_strata = False
+        self._loaded_port = None
+        self._pending_strata_note = ""
 
         self.config_manager = ConfigManager(self.config_file)
         self.model_manager = ModelManager(self.models_file)
@@ -50,6 +58,9 @@ class MainWindow(QWidget):
         self.wizard_timer = QTimer(self)
         self.wizard_is_benchmarking = False
         self.output_buffer = ""
+        # Trailing incomplete line kept across flushes so log lines split across
+        # flush boundaries are still seen whole by the parsers.
+        self.output_carry = ""
         self.output_update_timer = QTimer(self)
         self.wizard_current_timeout = 300000
 
@@ -68,6 +79,10 @@ class MainWindow(QWidget):
         self.idle_regex = re.compile(r"all slots are idle", re.IGNORECASE)
         self.layer_count_regex = re.compile(r"n_layer\s*=\s*(\d+)", re.IGNORECASE)
         self.context_length_regex = re.compile(r"[a-zA-Z0-9_.-]+\.context_length\s+u32\s+=\s+(\d+)", re.IGNORECASE)
+        # Total context of the loaded server (per-slot context x parallel), from the
+        # llama.cpp context params log line ("n_ctx = 4096"). Used to convert the
+        # b9870+ memory-breakdown table's context MiB into a per-token KV cost.
+        self.n_ctx_regex = re.compile(r"^\s*n_ctx\s*=\s*(\d+)", re.MULTILINE)
 
         # Capture KV Cache stats (old format)
         self.kv_cache_regex = re.compile(r"llama_kv_cache:\s+size\s+=\s+([\d.]+)\s+MiB\s+\(\s*(\d+)\s+cells")
@@ -101,12 +116,11 @@ class MainWindow(QWidget):
 
         self.wizard_found_layers = None
         self.wizard_found_context = None
+        self.wizard_probe_n_ctx = None
         self.wizard_error_details = None
         self.wizard_found_expert_count = False
         self.wizard_found_qwen3vl = False
         self.wizard_found_gpus = []
-        self.wizard_found_expert_count = False
-        self.wizard_found_qwen3vl = False
         self.wizard_tps_results = []
         self.benchmark_timeout_timer = None
         self.wizard = None
@@ -197,6 +211,9 @@ class MainWindow(QWidget):
     def handle_stdout(self):
         try:
             data = self.process.readAllStandardOutput().data().decode('utf-8', errors='ignore');
+            if self.output_carry:
+                data = self.output_carry + data
+                self.output_carry = ""
             self.output_buffer += data
             if not self.output_update_timer.isActive(): self.output_update_timer.start()
 
@@ -223,19 +240,31 @@ class MainWindow(QWidget):
 
                 # 1b. Capture KV Stats from new memory breakdown table (llama.cpp b9870+)
                 if self.wizard_current_is_viability_check == 'kv_probe' and self.analysis_results.get('kv_mb_per_token', 0) <= 0:
+                    if self.wizard_probe_n_ctx is None:
+                        nctx_match = self.n_ctx_regex.search(self.output_buffer)
+                        if nctx_match:
+                            try:
+                                self.wizard_probe_n_ctx = int(nctx_match.group(1))
+                            except ValueError:
+                                pass
                     mem_table_matches = self.kv_memory_table_regex.finditer(self.output_buffer)
                     for match in mem_table_matches:
                         try:
                             device_label = match.group(1)  # e.g. "CUDA0"
                             context_mib = float(match.group(2))  # context (KV cache) MiB
                             if context_mib > 0:
-                                # Derive total tokens from probe params
-                                # Probe uses -c 4096, n_parallel defaults to 4 slots
-                                probe_ctx = int(self.initial_params.get('-c', 4096)) if hasattr(self, 'initial_params') else 4096
-                                # n_ctx_slot may be capped to n_ctx_train; use the actual context from log
-                                actual_ctx = self.wizard_found_context if self.wizard_found_context else probe_ctx
-                                n_slots = 4  # default n_parallel
-                                total_tokens = actual_ctx * n_slots
+                                # Total tokens in the loaded context. The wizard probe loads
+                                # with -c 4096 and llama-server's default --parallel of 1 slot,
+                                # but we prefer the exact n_ctx from the log when available
+                                # (it already includes any --parallel scaling).
+                                probe_ctx = 4096
+                                for p in self.right_panel.get_parameters():
+                                    if p.key == '-c':
+                                        try:
+                                            probe_ctx = int(float(p.value))
+                                        except (ValueError, TypeError):
+                                            pass
+                                total_tokens = self.wizard_probe_n_ctx if self.wizard_probe_n_ctx else probe_ctx
                                 entry = (context_mib, device_label)
                                 if entry not in self.captured_kv_entries:
                                     self.captured_kv_entries.append(entry)
@@ -282,7 +311,7 @@ class MainWindow(QWidget):
                 if should_check_resources and self.detected_cpu_usage_mib > 0:
                     free_ram_mib = self.analysis_results.get('ram', {}).get('free_gb', 0) * 1024
                     # 128 MB Safety Buffer for OS response
-                    if self.detected_cpu_usage_mib > (free_ram_mib - 16):
+                    if self.detected_cpu_usage_mib > (free_ram_mib - 128):
                         print(
                             f"[RESOURCE GUARD] RAM Critical: Used {self.detected_cpu_usage_mib:.1f} MiB > Available {free_ram_mib:.1f} MiB")
                         self.left_panel.append_output(
@@ -383,6 +412,10 @@ class MainWindow(QWidget):
             self.output_buffer += f"\n--- Error reading output: {e} ---\n"
 
     def process_finished(self):
+        # Flush any held-back partial line before the final parse/flush
+        if self.output_carry:
+            self.output_buffer += self.output_carry + "\n"
+            self.output_carry = ""
         self.handle_stdout()
         self.flush_output_buffer()
 
@@ -390,12 +423,6 @@ class MainWindow(QWidget):
         log_msg = "\n" + "=" * 80 + f"\n--- Process Finished ---"
         self.left_panel.append_output(log_msg)
         self.log_diagnostic(f"[DIAGNOSTICS] QProcess finished signal received. Original status: {original_status_label}")
-        if self.temp_batch_file and os.path.exists(self.temp_batch_file):
-            try:
-                os.remove(self.temp_batch_file);
-                self.temp_batch_file = ''
-            except OSError:
-                pass
 
         is_error = 'Loading...' in original_status_label
         self.left_panel.set_status(ServerStatus.ERROR if is_error else ServerStatus.UNLOADED)
@@ -640,6 +667,7 @@ class MainWindow(QWidget):
             elif action_type == 'probe_kv_stats':
                 self.wizard_current_is_viability_check = "kv_probe"
                 self.wizard_error_details = None
+                self.wizard_probe_n_ctx = None
             else:  # load_and_benchmark
                 self.wizard_current_is_viability_check = False
                 self.wizard_current_timeout = action.get('timeout_ms', 300000)
@@ -668,7 +696,8 @@ class MainWindow(QWidget):
         llamacpp_dirs = self.model_manager._get_model_llamacppdirs()
         model_dir = llamacpp_dirs.get(current_name, "")
         is_ninfer = is_ninfer_command(command_str)
-        self.right_panel.populate(command_parts, current_name, self.current_model_env_vars, model_dir, is_ninfer=is_ninfer)
+        is_strata = is_strata_command(command_str)
+        self.right_panel.populate(command_parts, current_name, self.current_model_env_vars, model_dir, is_ninfer=is_ninfer, is_strata=is_strata)
         # Update parameter browser for NInfer vs Llama.cpp
         self._update_parameter_browser_for_model(command_parts)
 
@@ -676,16 +705,31 @@ class MainWindow(QWidget):
         self.analysis_results = None
         self.current_model_llamacppdir = ""
         if index == -1 or index == self.previous_model_index: return
+        # Remember which model the user asked for; a Save below rebuilds the
+        # dropdown, which can reorder or re-index entries.
+        target_name = self.left_panel.model_dropdown.itemText(index)
         if self.is_dirty:
             reply = QMessageBox.question(self, 'Unsaved Changes', "Save unsaved changes before switching?",
                                          QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
                                          QMessageBox.StandardButton.Cancel)
             if reply == QMessageBox.StandardButton.Save:
-                self.save_parameters();
-                return
+                if self.save_parameters():
+                    # Continue with the user's original switch request. Re-resolve
+                    # the target by name because the save may have rebuilt the
+                    # dropdown (renames reorder it).
+                    new_index = self.left_panel.model_dropdown.findText(target_name)
+                    if new_index >= 0 and new_index != self.previous_model_index:
+                        index = new_index
+                    else:
+                        return  # target no longer exists or we're already on it
+                else:
+                    # Save failed — stay on the current model, don't lose anything
+                    self.left_panel.set_dropdown_index(self.previous_model_index)
+                    return
             elif reply == QMessageBox.StandardButton.Cancel:
-                self.left_panel.set_dropdown_index(self.previous_model_index);
+                self.left_panel.set_dropdown_index(self.previous_model_index)
                 return
+            # Discard: fall through — right_panel.populate() clears the dirty state
         self._reload_editor_for_model(index)
         self.previous_model_index = index
         # Load env vars for the selected model
@@ -712,13 +756,22 @@ class MainWindow(QWidget):
         self.right_panel.set_llamacpp_dir(self.current_model_llamacppdir)
 
     def _update_parameter_browser_for_model(self, command_parts):
-        """Switch the parameter browser between Llama.cpp and NInfer parameter sets."""
-        is_ninfer = is_ninfer_params(command_parts)
-        self.left_panel.parameter_browser.set_mode(is_ninfer)
+        """Switch the parameter browser between Llama.cpp, NInfer and Strata parameter sets."""
+        if is_strata_params(command_parts):
+            engine = 'strata'
+        elif is_ninfer_params(command_parts):
+            engine = 'ninfer'
+        else:
+            engine = 'llama'
+        self.left_panel.parameter_browser.set_mode(engine)
         # Enable/disable tuning wizard button based on model type
-        if is_ninfer:
+        if engine == 'ninfer':
             self.left_panel.tuning_wizard_button.setEnabled(False)
             self.left_panel.tuning_wizard_button.setToolTip("Tuning Wizard is not available for NInfer models")
+        elif engine == 'strata':
+            self.left_panel.tuning_wizard_button.setEnabled(False)
+            self.left_panel.tuning_wizard_button.setToolTip(
+                "Tuning Wizard is not available for Strata models — tune the JSON config file instead")
         else:
             self.left_panel.tuning_wizard_button.setEnabled(True)
             self.left_panel.tuning_wizard_button.setToolTip("")
@@ -737,6 +790,17 @@ class MainWindow(QWidget):
             value = input_widget.currentText()
         elif isinstance(input_widget, QLineEdit):
             value = input_widget.text().strip()
+        # strata.exe engine flags live in the config JSON's args array, not the
+        # serve/server.py command line — route them into the Strata Config panel.
+        if param_data.get('target') == 'strata_args':
+            if not self.right_panel.strata_panel.is_loaded():
+                QMessageBox.warning(self, "Not Available",
+                                    "This flag belongs to the Strata config (Engine Args), "
+                                    "but no config file is loaded for this profile.")
+                return
+            self.right_panel.add_strata_arg(param_data['prefix'], value)
+            self.right_panel._mark_as_dirty()
+            return
         self.right_panel.add_parameter_row(param_data['prefix'], value)
         # --- FIX: Trigger dirty state so the asterisk appears ---
         self.right_panel._mark_as_dirty()
@@ -777,11 +841,28 @@ class MainWindow(QWidget):
                 QMessageBox.critical(self, "File Error", message)
 
     def save_parameters(self):
+        """Saves the current editor content. Returns True on success, False on failure."""
         new_name = self.right_panel.get_model_name()
-        if not new_name: QMessageBox.warning(self, "Input Error", "Model name cannot be empty."); return
+        if not new_name: QMessageBox.warning(self, "Input Error", "Model name cannot be empty."); return False
         params_from_editor = self.right_panel.get_parameters()
         is_ninfer = is_ninfer_params(params_from_editor)
-        new_command = self.command_builder.build(params_from_editor, is_ninfer=is_ninfer)
+        is_strata = is_strata_params(params_from_editor)
+        new_command = self.command_builder.build(params_from_editor, is_ninfer=is_ninfer,
+                                                 is_strata=is_strata)
+        # Strata: write the JSON config first (with .bak backup); if that fails,
+        # save nothing so the two files never disagree.
+        strata_note = ""
+        if is_strata:
+            cfg = self.right_panel.get_strata_config()
+            if cfg is not None:
+                cfg_path = self.right_panel.strata_config_path()
+                ok, err = save_config(cfg_path, cfg)
+                if not ok:
+                    QMessageBox.critical(self, "Config Save Failed",
+                                         f"Could not write the Strata config:\n\n{err}\n\nNothing was saved.")
+                    return False
+                strata_note = (f"\nStrata config saved: {cfg_path}"
+                               f"\n(previous file kept as {cfg_path}.bak)")
         env_vars_text = self.right_panel.get_env_vars()
         old_name = ""
         if not self.is_editing_new_model and self.previous_model_index != -1:
@@ -790,15 +871,17 @@ class MainWindow(QWidget):
         self.model_manager.llamacppdir_to_save = self.right_panel.get_llamacpp_dir()
         success, message = self.model_manager.save_model(old_name, new_name, new_command, self.is_editing_new_model)
         if success:
-            QMessageBox.information(self, "Success", message)
+            QMessageBox.information(self, "Success", message + strata_note)
             self.is_editing_new_model = False
             self.right_panel.clear_dirty_state()
             self.current_model_env_vars = env_vars_text
             current_selection = self.populate_model_dropdown()
             if new_name in current_selection: self.left_panel.model_dropdown.setCurrentText(new_name)
             self.previous_model_index = self.left_panel.model_dropdown.currentIndex()
+            return True
         else:
             QMessageBox.critical(self, "Error", message)
+            return False
 
     def duplicate_model(self):
         if self.is_dirty and QMessageBox.question(self, 'Unsaved Changes', "Save changes first?",
@@ -815,7 +898,8 @@ class MainWindow(QWidget):
         self.left_panel.set_dropdown_index(-1)
         current_params = self.right_panel.get_parameters()
         is_ninfer = is_ninfer_params(current_params)
-        self.right_panel.populate(current_params, new_name, self.current_model_env_vars, self.current_model_llamacppdir, is_ninfer=is_ninfer)
+        is_strata = is_strata_params(current_params)
+        self.right_panel.populate(current_params, new_name, self.current_model_env_vars, self.current_model_llamacppdir, is_ninfer=is_ninfer, is_strata=is_strata)
         # env vars carried over automatically
 
     def update_auto_open_visibility(self):
@@ -969,7 +1053,16 @@ class MainWindow(QWidget):
                                          QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
                                          QMessageBox.StandardButton.Cancel)
             if reply == QMessageBox.StandardButton.Save:
-                self.save_parameters()
+                if not self.save_parameters():
+                    # The save failed (e.g. duplicate name) — don't exit silently
+                    # and lose the changes; ask again.
+                    retry = QMessageBox.question(self, 'Save Failed',
+                                                 "Saving failed. Discard changes and exit?",
+                                                 QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+                                                 QMessageBox.StandardButton.Cancel)
+                    if retry == QMessageBox.StandardButton.Cancel:
+                        event.ignore()
+                        return
             elif reply == QMessageBox.StandardButton.Cancel:
                 event.ignore();
                 return
@@ -997,22 +1090,65 @@ class MainWindow(QWidget):
         if not effective_dir: QMessageBox.warning(self, "Warning", "Set the Llama.cpp directory first."); return
         params_from_editor = self.right_panel.get_parameters()
         is_ninfer = is_ninfer_params(params_from_editor)
-        command_str = self.command_builder.build(params_from_editor, is_ninfer=is_ninfer)
-        if not command_str: QMessageBox.warning(self, "Warning", "Command is empty."); return
+        is_strata = is_strata_params(params_from_editor)
+        args_list = self.command_builder.build_args(params_from_editor, is_ninfer=is_ninfer,
+                                                    is_strata=is_strata)
+        if not args_list: QMessageBox.warning(self, "Warning", "Command is empty."); return
+
+        # Only auto-append --no-webui for Llama.cpp models (NInfer and Strata don't support it;
+        # Strata's web app is always on, --open controls the browser popup instead)
+        if not is_ninfer and not is_strata:
+            if self.left_panel.webui_checkbox.isChecked():
+                if '--no-webui' in args_list:
+                    args_list.remove('--no-webui')
+            elif '--no-webui' not in args_list:
+                args_list.append('--no-webui')
+
+        # --- Strata preflight (mirrors the run-iq3_s*.bat scripts) ---
+        strata_port = None
+        if is_strata:
+            params_dict = {p.key: p.value for p in params_from_editor}
+            config_path = params_dict.get('--config') or ''
+            try:
+                strata_port = int(params_dict.get('--port') or 8081)
+            except ValueError:
+                strata_port = 8081
+            # Port conflict guard: the wrapper auto-restarts its engine, so a second
+            # instance against a busy port leaves traces — refuse to start instead.
+            if port_in_use(strata_port):
+                QMessageBox.warning(
+                    self, "Port Already in Use",
+                    f"Something is already listening on port {strata_port}.\n\n"
+                    "Strata (or another server) is probably still running — stop it first "
+                    "(the launcher's Stop button does a full Strata stop), then try again.")
+                return
+            # Greedy profile: the greedy JSON is normally generated from the live
+            # config by make-greedy-config.py (sits next to the config). The config
+            # editor now lets you edit the greedy file directly, so regenerate ONLY
+            # when the file is missing — never overwrite your saved edits.
+            if 'greedy' in os.path.basename(config_path).lower() and not os.path.exists(config_path):
+                ok, msg = regenerate_greedy_config(args_list[0], config_path)
+                if not ok:
+                    QMessageBox.critical(self, "Strata Launch Aborted",
+                                         f"Greedy config file is missing and could not be regenerated:\n\n{msg}")
+                    return
+                self._pending_strata_note = ("[STRATA] Greedy config missing - regenerated from live: "
+                                             + (msg.splitlines()[-1] if msg else config_path))
+            else:
+                self._pending_strata_note = ""
+
+        # Display string for the log (properly quoted for the platform)
+        command_str = subprocess.list2cmdline(args_list) if IS_WINDOWS else shlex.join(args_list)
 
         # --- FIX: Reset KV capture list for new run ---
         self.captured_kv_entries = []
+        self.output_buffer = ""
+        self.output_carry = ""
 
         log_msg = f"Working Dir: {effective_dir}\nExecuting Command: {command_str}\n\n" + "=" * 80 + "\n"
         if not self.wizard_generator: self.left_panel.clear_output();
         self.left_panel.append_output(log_msg)
         print(f"\n[DIAGNOSTICS] LAUNCHING SERVER\n[DIAGNOSTICS] > {command_str}\n")
-        # Only auto-append --no-webui for Llama.cpp models (NInfer doesn't support it)
-        if not is_ninfer:
-            if not self.left_panel.webui_checkbox.isChecked() and '--no-webui' not in command_str:
-                command_str += ' --no-webui'
-            else:
-                command_str = re.sub(r'\s+--no-webui\b', '', command_str)
         self.process = QProcess()
         self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.process.readyReadStandardOutput.connect(self.handle_stdout)
@@ -1038,25 +1174,31 @@ class MainWindow(QWidget):
             )
         self.process.setProcessEnvironment(process_env)
 
-        if IS_WINDOWS:
-            try:
-                temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.bat', delete=False, encoding='utf-8')
-                self.temp_batch_file = temp_file.name
-                # No longer write 'set KEY=value' lines here — environment variables are
-                # now injected via QProcessEnvironment above. The batch file only exists
-                # to give QProcess a stable, path-safe entry point for the command line.
-                temp_file.write('@echo off\n')
-                temp_file.write(command_str)
-                temp_file.close()
-            except Exception as e:
-                QMessageBox.critical(self, "File Error", f"Could not create temp batch file:\n{e}")
-                return
-            self.process.start(self.temp_batch_file)
+        # Start the server directly with QProcess on ALL platforms.
+        # QProcess performs its own argument quoting for CreateProcess (Windows)
+        # and execvp (POSIX), so shell metacharacters in model paths or
+        # parameter values can never be interpreted by a shell (the old .bat
+        # round-trip on Windows was a residual injection vector).
+        if is_strata:
+            # Strata uses 2 MB large pages: enable the privileges in this token so
+            # the engine inherits them (no elevation needed once grant-large-pages.ps1
+            # has assigned the rights to the account). Failure just falls back to 4 KB pages.
+            priv_results = enable_large_page_privileges()
+            if priv_results.get('SeLockMemoryPrivilege'):
+                self.left_panel.append_output("[STRATA] Large pages: SeLockMemoryPrivilege enabled (engine will use 2 MB pages).")
+            else:
+                self.left_panel.append_output(
+                    "[STRATA] WARNING: SeLockMemoryPrivilege not enabled — Strata falls back to 4 KB pages (slower).\n"
+                    "[STRATA] Run grant-large-pages.ps1 once as administrator, then log off/on, to fix this.")
+            note = getattr(self, '_pending_strata_note', '')
+            if note:
+                self.left_panel.append_output(note)
+            self._loaded_is_strata = True
+            self._loaded_port = strata_port
         else:
-            tokens = shlex.split(command_str)
-            program = tokens[0]
-            args = tokens[1:]
-            self.process.start(program, args)
+            self._loaded_is_strata = False
+            self._loaded_port = None
+        self.process.start(args_list[0], args_list[1:])
         self.left_panel.set_status(ServerStatus.LOADING);
         self.update_button_states()
 
@@ -1096,6 +1238,15 @@ class MainWindow(QWidget):
 
         text_to_append = self.output_buffer
         self.output_buffer = ""
+
+        # Keep any trailing incomplete line (a log line split across two flushes)
+        # so the regex checks below see it whole.
+        last_nl = text_to_append.rfind('\n')
+        if last_nl == -1:
+            self.output_carry = text_to_append
+            return  # only a partial line so far; it completes on the next flush
+        self.output_carry = text_to_append[last_nl + 1:]
+        text_to_append = text_to_append[:last_nl + 1]
 
         # Only show raw output if we are NOT running the wizard
         if self.wizard_generator is None and not self.wizard_is_benchmarking:
@@ -1189,11 +1340,16 @@ class MainWindow(QWidget):
             self.unload_model()
 
         is_loading = "Loading..." in self.left_panel.status_label.text()
-        if is_loading and "model loaded" in text_to_append.lower():
+        # Strata's serve wrapper prints "ready: http://127.0.0.1:<port>/v1 ..." once the
+        # engine has loaded the model and the API is answering — its load-complete signal.
+        strata_ready = bool(getattr(self, '_loaded_is_strata', False) and
+                            re.search(r'^ready: https?://', text_to_append,
+                                      re.IGNORECASE | re.MULTILINE))
+        if is_loading and ("model loaded" in text_to_append.lower() or strata_ready):
             self.left_panel.set_status(ServerStatus.LOADED)
             log_msg = "\n[INFO] Model is fully loaded."
             self.left_panel.append_output(log_msg)
-            self.log_diagnostic(f"[DIAGNOSTICS] Detected 'model loaded' string.")
+            self.log_diagnostic("[DIAGNOSTICS] Detected load-complete signal.")
 
 
 
@@ -1269,6 +1425,24 @@ class MainWindow(QWidget):
                     self.process.kill()
                     self.process.waitForFinished(3000)
 
+        # Full Strata stop (mirrors STOP-STRATA.bat): the serve wrapper auto-restarts
+        # its engine, so killing the tree alone can leave strata.exe / strata-vision.exe
+        # behind holding port 8081 — sweep leftovers and wait for the port to free.
+        if getattr(self, '_loaded_is_strata', False):
+            port = self._loaded_port or 8081
+            self.left_panel.append_output(
+                f"[STRATA] Full stop: sweeping strata processes and waiting for port {port} to free...")
+            ok = strata_full_stop(port, log=self.left_panel.append_output,
+                                  pump=QApplication.processEvents)
+            if ok:
+                self.left_panel.append_output(f"[STRATA] Port {port} is free — Strata fully stopped.")
+            else:
+                self.left_panel.append_output(
+                    f"[STRATA] WARNING: port {port} is still busy after the full stop. "
+                    "Run STOP-STRATA.bat in the Strata folder to clear it.")
+            self._loaded_is_strata = False
+            self._loaded_port = None
+
     def start_tuning_wizard(self):
         self.left_panel.show_output_view();
         self.left_panel.clear_output()
@@ -1281,6 +1455,14 @@ class MainWindow(QWidget):
             QMessageBox.information(self, "NInfer Model",
                                     "The Tuning Wizard is not available for NInfer models.\n\n"
                                     "NInfer uses a fixed optimized pipeline — configure parameters directly in the editor.")
+            self._cancel_tuning_wizard()
+            return
+        # Block tuning wizard for Strata models: their tuning lives in the JSON config
+        if is_strata_params(self.right_panel.get_parameters()):
+            QMessageBox.information(self, "Strata Model",
+                                    "The Tuning Wizard is not available for Strata models.\n\n"
+                                    "Strata's tuning (args, sampling, vision, GPU...) lives inside its JSON config file — "
+                                    "edit that file (or point the profile at a different --config).")
             self._cancel_tuning_wizard()
             return
         model_path = current_params.get('-m', current_params.get('--model'))

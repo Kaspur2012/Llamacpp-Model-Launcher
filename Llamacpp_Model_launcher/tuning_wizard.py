@@ -378,6 +378,9 @@ class TuningWizard:
 
         # 2. IMPORTANT: Update the dictionary so downstream strategies don't see -1
         user_choices['target_context'] = user_target_context
+        # Keep a reference so fallback paths (e.g. single-GPU failure -> multi-CPU)
+        # can honor the user's target context / maximize selections.
+        self.user_choices = user_choices
 
         yield {'action': 'log', 'message': "\n[PHASE 3] Finding Optimal Layer Offload..."}
         best_offload_params = None
@@ -676,6 +679,8 @@ class TuningWizard:
 
     def _tune_multi_cpu(self, user_choices=None):
         yield {'action': 'log', 'message': "> Strategy: Multi-GPU with CPU Offload"}
+        if user_choices is None:
+            user_choices = getattr(self, 'user_choices', None)
         is_moe = self.analysis.get('model_architecture') == 'Mixture of Experts (MoE)'
         if is_moe:
             return (yield from self._tune_moe_multi_cpu(user_choices))
@@ -683,6 +688,10 @@ class TuningWizard:
             return (yield from self._tune_dense_multi_cpu(user_choices))
 
     def _tune_context_size_adaptive(self, base_offload_params, strategy, target_limit):
+        # The user-configured minimum free VRAM (from the summary panel) governs
+        # all safety stops below, so the search stops at the overhead the user
+        # asked for instead of a hardcoded 600 MB.
+        vram_floor_mib = getattr(self, 'vram_floor_mb', 600)
         yield {'action': 'log',
                'message': f"> Starting Bottom-Up Context Search (Doubling Strategy). Target: {target_limit}"}
 
@@ -781,8 +790,9 @@ class TuningWizard:
                                 info = self.last_successful_vram_info[lookup_id]
                                 free_mib = (info['total_gb'] - info['used_gb']) * 1024
 
-                                # Safety Buffer 600MB
-                                usable_slack_mib = max(0, free_mib - 600)
+                                # Safety buffer: keep the user's configured minimum
+                                # free VRAM headroom when deciding if a jump fits
+                                usable_slack_mib = max(0, free_mib - vram_floor_mib)
                                 net_deficit_mib = added_vram_cost_mib - usable_slack_mib
 
                                 if net_deficit_mib > 0:
@@ -810,10 +820,13 @@ class TuningWizard:
                                 yield {'action': 'log',
                                        'message': f"  > Prediction: Reducing -ngl to {predicted_ngl} to fit context."}
 
-            # Test this level using Helper (Up to 20 retries for TS balancing)
-            # Use a slightly complex loop to handle CPU offload layer dropping *if* TS fails
+            # Test this level using Helper. The helper already retries up to 50 times
+            # (adapting -ts), so this outer loop only needs a few rounds of layer
+            # dropping before the level is declared unsolvable and the binary-search
+            # refinement below takes over. (Was 20 — 20x50 full loads per level could
+            # thrash the machine for hours on large models.)
             level_success = False
-            for attempt in range(20):
+            for attempt in range(5):
                 result = yield from self._run_test_with_ts_balancing(temp_params, timeout, max_retries=50)
 
                 # PERSISTENCE FIX: Keep the best TS found even if this attempt failed (for next layer drop)
@@ -857,7 +870,7 @@ class TuningWizard:
                             if lookup_id in self.last_successful_vram_info:
                                 info = self.last_successful_vram_info[lookup_id]
                                 free_mib = (info['total_gb'] - info['used_gb']) * 1024
-                                if free_mib < 600:
+                                if free_mib < vram_floor_mib:
                                     yield {'action': 'log', 'message': f"  > Safety Limit Hit: Only {free_mib:.1f} MB free. Stopping search."}
                                     should_stop_early = True
 
@@ -865,7 +878,7 @@ class TuningWizard:
                             total_surplus_mib = 0
                             for gid, info in self.last_successful_vram_info.items():
                                 free_mib = (info['total_gb'] - info['used_gb']) * 1024
-                                total_surplus_mib += max(0, free_mib - 600)
+                                total_surplus_mib += max(0, free_mib - vram_floor_mib)
 
                             if total_surplus_mib < 256:
                                 yield {'action': 'log', 'message': f"  > Safety Limit Hit: System-wide surplus is {total_surplus_mib:.1f} MB. Stopping search."}
@@ -928,7 +941,7 @@ class TuningWizard:
                                     if lookup_id in self.last_successful_vram_info:
                                         info = self.last_successful_vram_info[lookup_id]
                                         free_mib = (info['total_gb'] - info['used_gb']) * 1024
-                                        if free_mib < 600:
+                                        if free_mib < vram_floor_mib:
                                             yield {'action': 'log', 'message': f"  > Safety Limit Hit: Only {free_mib:.1f} MB free. Stopping search."}
                                             break
 
@@ -936,7 +949,7 @@ class TuningWizard:
                                     total_surplus_mib = 0
                                     for gid, info in self.last_successful_vram_info.items():
                                         free_mib = (info['total_gb'] - info['used_gb']) * 1024
-                                        total_surplus_mib += max(0, free_mib - 600)
+                                        total_surplus_mib += max(0, free_mib - vram_floor_mib)
 
                                     if total_surplus_mib < 256:
                                         yield {'action': 'log', 'message': f"  > Safety Limit Hit: System-wide surplus is {total_surplus_mib:.1f} MB. Stopping search."}
@@ -965,14 +978,14 @@ class TuningWizard:
                             if lookup_id in self.last_successful_vram_info:
                                 info = self.last_successful_vram_info[lookup_id]
                                 free_mib = (info['total_gb'] - info['used_gb']) * 1024
-                                if free_mib < 600:
+                                if free_mib < vram_floor_mib:
                                     should_stop_after_refinement = True
 
                         elif strategy == 'multi_vram':
                             total_surplus_mib = 0
                             for gid, info in self.last_successful_vram_info.items():
                                 free_mib = (info['total_gb'] - info['used_gb']) * 1024
-                                total_surplus_mib += max(0, free_mib - 600)
+                                total_surplus_mib += max(0, free_mib - vram_floor_mib)
 
                             if total_surplus_mib < 256:
                                 should_stop_after_refinement = True
@@ -1261,10 +1274,13 @@ class TuningWizard:
                     yield {'action': 'log', 'message': f"  > SUCCESS (Reduced Context)."}
                     break
 
-            if error_details and error_details.get('device_id') != self.primary_gpu_id:
+            # An OOM with no identifiable failing device reports device_id -1;
+            # only a failure on a real, non-primary device is a crossover point.
+            failing_device = error_details.get('device_id') if error_details else None
+            if failing_device is not None and failing_device != -1 and failing_device != self.primary_gpu_id:
                 crossover_ncmoe = ncmoe_to_test
                 yield {'action': 'log',
-                       'message': f"  > Crossover found. GPU {error_details['device_id']} is bottleneck."}
+                       'message': f"  > Crossover found. GPU {failing_device} is bottleneck."}
                 break
 
         if crossover_ncmoe == -1: return None
@@ -1276,8 +1292,11 @@ class TuningWizard:
                                                                     self.analysis['model_size_gb'], self.primary_gpu_id)
         current_ts_string = ",".join([f"{p:.3f}" for p in ts_proportions]) if ts_proportions else ""
 
-        # Using a specialized loop here because we increment -ncmoe on failure rather than just stopping
-        max_attempts = 200
+        # Using a specialized loop here because we increment -ncmoe on failure rather
+        # than just stopping. The useful range is bounded by the number of layers,
+        # so the cap follows total_layers instead of a flat 200 (which, combined
+        # with 50 inner retries per attempt, could mean thousands of full loads).
+        max_attempts = max(30, total_layers + 20)
         for attempt in range(max_attempts):
             yield {'action': 'log', 'message': f"\n> Attempt {attempt + 1}: Testing -ncmoe {current_ncmoe}"}
             params_to_test = {'-ngl': '99', '-ncmoe': str(current_ncmoe), '-ts': current_ts_string, **ctx_param}
@@ -1318,13 +1337,16 @@ class TuningWizard:
     # --- RESTORED UTILITY METHODS ---
     def _run_final_benchmark(self, params_to_test):
         final_benchmark_params = params_to_test.copy()
+        # Benchmark at the context the wizard actually settled on. Phase 4.6 may have
+        # deliberately reduced -c below 4096 for resource safety; forcing it back up
+        # here could OOM and abort tuning, discarding a viable configuration.
         try:
-            if int(final_benchmark_params.get('-c', 0)) < 4096:
+            if int(final_benchmark_params.get('-c', 0)) < 512:
                 final_benchmark_params['-c'] = '4096'
-                yield {'action': 'log', 'message': "> Forcing benchmark context to 4096 for stability."}
+                yield {'action': 'log', 'message': "> No valid context set; benchmarking at default 4096."}
         except (ValueError, TypeError):
             final_benchmark_params['-c'] = '4096'
-            yield {'action': 'log', 'message': "> Forcing benchmark context to 4096 for stability."}
+            yield {'action': 'log', 'message': "> Invalid context value; benchmarking at default 4096."}
         yield {'action': 'update_params', 'params': {**self.base_params, **final_benchmark_params}}
         timeout = self._calculate_dynamic_timeout('benchmark')
         benchmark_result = yield {'action': 'load_and_benchmark', 'timeout_ms': timeout}

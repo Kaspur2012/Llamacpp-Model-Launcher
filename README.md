@@ -279,6 +279,27 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 
 ##   Change Log
 
+*   10/18/2026 -
+    *   **Strata inference engine support** — full integration of the Strata engine (`serve/server.py` wrapper + `strata.exe`) alongside Llama.cpp and NInfer, with two example profiles (`Strata-Qwen3-IQ3_S` and `Strata-Qwen3-IQ3_S-Greedy`) in the default template
+        *   Launches the venv Python + `serve\server.py --engine strata --config <json> --port 8081` directly — no .bat files, no UAC prompt; 2 MB large pages are enabled per launch after a one-time elevated run of the new `grant-large-pages.ps1` (+ log off/on); falls back to 4 KB pages with a log warning until then
+        *   **Strata Config (JSON) editor** — a new section under the parameter editor mirrors the profile's own config file exactly as editable rows: **Engine Args** (the `strata.exe` flags inside the JSON), **Sampling**, **Config Settings**, **Vision**, **Engine Environment** — with add/remove per row and type-preserving save
+        *   **Save to File** writes the JSON config (validated, previous version kept as `<name>.json.bak`) *and* the models.txt plumbing; if the JSON write fails, nothing is saved
+        *   Greedy config is regenerated from the live one via `make-greedy-config.py` **only when missing** — direct edits to any config file are never overwritten
+        *   Port conflict guard refuses to launch Strata on a busy port; the wrapper's `ready:` line triggers LOADED + Auto-Open of the Strata web app
+        *   **Stop = full STOP-STRATA.bat replication** — wrapper tree killed first, then `strata.exe`/`strata-vision.exe` sweep, then the port is polled free (up to 20 s) so no auto-restart survivors remain
+        *   Dedicated Strata parameter browser: `serve/server.py` flags plus five click-to-add groups of `strata.exe` engine flags (Context & KV, Model & PLE, Speculative/MTP, Expert Cache/Adaptive, Prefill/Cache/GPU) that land in the config's args section
+        *   Tuning Wizard blocked for Strata (tuning lives in the JSON config); `--no-webui` never injected
+    *   **Fixes & improvements**
+        *   **Unquoted model paths with spaces** in the models file are now merged back into one path (e.g. `-m D:\backup models\Qwen.gguf`)
+        *   **Duplicate-name profiles keep their own `env:`/`llamacppdir:` blocks** — command lines are recognized structurally, so identical commands no longer steal each other's metadata
+        *   **GPU names containing commas** no longer break the `nvidia-smi` fallback detection (memory columns were shifted)
+        *   **Tuning Wizard** now honors your **Min VRAM (MB)** floor everywhere (was hardcoded 600 MB in the context search), fallback strategies keep your target-context choice, and the per-level retry loop was cut 20→5 rounds (the inner `-ts` balancing already retries 50×) to stop hours-long thrash
+        *   **Web UI checkboxes** are restored after the Tuning Wizard finishes; `stateChanged` → `toggled(bool)` signal wiring (stable across Qt builds); removed a broken `check.png` style reference
+        *   **Output log is bounded** (~200 K chars, trimmed on line boundaries) so long server runs stay fast
+    *   Release EXE is `run_app.exe` (rebuilt in `dist\`)
+
+    > 🤖 All changes implemented by [pi](https://pi.dev) with Qwen3.8-Flash-Next IQ3_S (running on Strata)
+
 *   08/18/2026 -
     *   **Critical fix: deleting a profile wiped the env vars of other profiles** — after deleting any profile, most of the *other* profiles lost their environment variables and had to be re-added/saved manually.
         *   Root cause: `delete_model()` kept a `found` flag true for the rest of the file and skipped **every** `env:`/`llamacppdir:` line appearing after the deleted profile — including the ones belonging to unrelated profiles below it

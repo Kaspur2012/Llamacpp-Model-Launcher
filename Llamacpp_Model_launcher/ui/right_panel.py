@@ -1,11 +1,14 @@
 # ui/right_panel.py
 
+import os
+
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
                              QScrollArea, QFormLayout, QFrame, QPushButton, QCheckBox,
                              QMessageBox, QFileDialog, QTextEdit)
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt, pyqtSignal
 from Llamacpp_Model_launcher.core.command_builder import Parameter
+from .strata_config_panel import StrataConfigPanel
 
 
 class RightPanel(QWidget):
@@ -23,6 +26,7 @@ class RightPanel(QWidget):
         super().__init__(parent)
         self._is_dirty = False
         self._is_ninfer_model = False
+        self._is_strata_model = False
         self._setup_ui()
 
     def _setup_ui(self):
@@ -116,9 +120,16 @@ class RightPanel(QWidget):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         layout.addWidget(scroll_area, 1)
+        self.param_scroll_area = scroll_area
         self.param_widget = QWidget()
         self.param_layout = QFormLayout(self.param_widget)
         scroll_area.setWidget(self.param_widget)
+
+        # Strata JSON config editor (visible only for Strata profiles)
+        self.strata_panel = StrataConfigPanel()
+        self.strata_panel.row_changed_callback = self._mark_as_dirty
+        self.strata_panel.setVisible(False)
+        layout.addWidget(self.strata_panel, 2)
 
         # Manual parameter adder
         add_frame = QFrame()
@@ -162,13 +173,14 @@ class RightPanel(QWidget):
         button_layout.addWidget(save_button)
         layout.addLayout(button_layout)
 
-    def populate(self, command_parts: list[Parameter], model_name: str, env_vars=None, llamacpp_dir=None, is_ninfer=False):
+    def populate(self, command_parts: list[Parameter], model_name: str, env_vars=None, llamacpp_dir=None, is_ninfer=False, is_strata=False):
         """Clears and fills the editor with a new set of parameters.
 
         env_vars and llamacpp_dir default to None (leave as-is) so callers that
         forget to pass them won't silently wipe the user's input.
         """
         self._is_ninfer_model = is_ninfer
+        self._is_strata_model = is_strata
         # Block signals on the container widget to prevent textChanged from firing
         self.param_widget.blockSignals(True)
         self.env_vars_input.blockSignals(True)
@@ -197,6 +209,34 @@ class RightPanel(QWidget):
             self.env_vars_input.blockSignals(False)
 
         self.clear_dirty_state()
+        self._update_strata_panel(command_parts, is_strata)
+
+    def _update_strata_panel(self, command_parts, is_strata):
+        """Show/hide the JSON config editor and load this profile's own config.
+        The panel always mirrors the exact contents of that file."""
+        if not is_strata:
+            self.strata_panel.setVisible(False)
+            self.param_scroll_area.setMaximumHeight(16777215)
+            return
+        config_value = None
+        for p in command_parts:
+            if p.key == '--config':
+                config_value = p.value
+                break
+        self.strata_panel.load(config_value)
+        self.strata_panel.setVisible(True)
+        # Strata command lines are short plumbing; give the config editor the room
+        self.param_scroll_area.setMaximumHeight(220)
+
+    def get_strata_config(self):
+        """The rebuilt Strata JSON config dict, or None if none is loaded."""
+        return self.strata_panel.get_config()
+
+    def strata_config_path(self):
+        return self.strata_panel.config_path()
+
+    def add_strata_arg(self, flag, value):
+        self.strata_panel.add_arg(flag, value)
 
     def _browse_file(self, line_edit, file_filter=None):
         """Helper to open file dialog and set line edit text."""
@@ -218,7 +258,7 @@ class RightPanel(QWidget):
         known_file_exts = {'.gguf', '.ggsuf', '.bin', '.safetensors', '.pth', '.ckpt', '.pt',
                            '.onnx', '.ggml', '.json', '.txt', '.jinja', '.yaml', '.yml',
                            '.ini', '.cfg', '.conf', '.xml', '.html', '.md', '.csv', '.log',
-                           '.dat', '.model', '.weights', '.ninfer'}
+                           '.dat', '.model', '.weights', '.ninfer', '.py'}
         # Windows absolute path (e.g., D:\path\to\file)
         if len(clean) >= 3 and clean[1:3] == ':\\' and clean[0].isalpha():
             _, ext = os.path.splitext(clean)
@@ -304,9 +344,12 @@ class RightPanel(QWidget):
         field_layout.addWidget(remove_button)
 
         # Display label — show "Model Path (positional)" for NInfer's -m
+        # and "Serve Script (positional)" for Strata's serve\server.py
         display_label = param_key
         if self._is_ninfer_model and param_key == '-m':
             display_label = "Model Path (positional)"
+        if getattr(self, '_is_strata_model', False) and param_key == 'Serve Script':
+            display_label = "Serve Script (positional)"
 
         label_widget = QLabel(display_label)
         # Store the original key so get_parameters() can retrieve it

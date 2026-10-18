@@ -42,3 +42,11 @@ env:MTMD_BACKEND_DEVICE=cuda1
 NInfer-qwen3_6_27b
 ninfer-serve.exe D:/backup_models/llm/qwen3_6_27b.ninfer --host 0.0.0.0 --port 8080 --max-context 115000 --kv-dtype int8 --mtp-draft-tokens 3 --lm-head-draft --no-cuda-graph --default-max-tokens 32768
 llamacppdir: D:/llamacpp/ninfer-rtx3090-windows-x64-0.2.0-rtx3090-v2/ninfer-rtx3090-windows-x64-0.2.0-rtx3090-v2
+
+Strata-Qwen3-IQ3_S
+D:\llamacpp\strata-qwen-iq3s-m6b2\.venv\Scripts\python.exe D:\llamacpp\strata-qwen-iq3s-m6b2\serve\server.py --engine strata --config D:\llamacpp\strata-qwen-iq3s-m6b2\strata-iq3_s.json --port 8081
+llamacppdir: D:/llamacpp/strata-qwen-iq3s-m6b2
+
+Strata-Qwen3-IQ3_S-Greedy
+D:\llamacpp\strata-qwen-iq3s-m6b2\.venv\Scripts\python.exe D:\llamacpp\strata-qwen-iq3s-m6b2\serve\server.py --engine strata --config D:\llamacpp\strata-qwen-iq3s-m6b2\strata-iq3_s_greedy.json --port 8081
+llamacppdir: D:/llamacpp/strata-qwen-iq3s-m6b2

@@ -1,6 +1,7 @@
 # core/model_manager.py
 
 import os
+import re
 from collections import OrderedDict, defaultdict
 
 
@@ -32,11 +33,39 @@ ninfer_qwen3.6_27b
 ninfer-serve.exe D:\\backup_models\\llm\\qwen3_6_27b.ninfer --host 127.0.0.1 --port 8080 --model-id qwen3.6-27b --max-context 8192 --kv-dtype int8 --mtp-draft-tokens 3 --lm-head-draft
 env:CUDA_VISIBLE_DEVICES=1
 llamacppdir: D:/llamacpp/ninfer-rtx3090-windows-x64-0.2.0-rtx3090-v2/ninfer-rtx3090-windows-x64-0.2.0-rtx3090-v2
+
+Strata-Qwen3-IQ3_S
+D:\\llamacpp\\strata-qwen-iq3s-m6b2\\.venv\\Scripts\\python.exe D:\\llamacpp\\strata-qwen-iq3s-m6b2\\serve\\server.py --engine strata --config D:\\llamacpp\\strata-qwen-iq3s-m6b2\\strata-iq3_s.json --port 8081
+llamacppdir: D:/llamacpp/strata-qwen-iq3s-m6b2
+
+Strata-Qwen3-IQ3_S-Greedy
+D:\\llamacpp\\strata-qwen-iq3s-m6b2\\.venv\\Scripts\\python.exe D:\\llamacpp\\strata-qwen-iq3s-m6b2\\serve\\server.py --engine strata --config D:\\llamacpp\\strata-qwen-iq3s-m6b2\\strata-iq3_s_greedy.json --port 8081
+llamacppdir: D:/llamacpp/strata-qwen-iq3s-m6b2
 """
 
 
 class ModelManager:
     """Handles parsing, loading, and saving model configurations to a text file."""
+
+    @staticmethod
+    def _is_command_line(line):
+        r"""Heuristic for "is this line a server command?".
+
+        Recognizes the usual llama-server / ninfer-serve names (bare or as a
+        path) as well as any explicit path to an executable, so renamed or
+        custom builds (e.g. D:\llamacpp\beellama\server.exe) still parse.
+        """
+        stripped = line.strip()
+        if not stripped:
+            return False
+        first_token = stripped.split()[0].lower()
+        base = first_token.rsplit('/', 1)[-1].rsplit('\\', 1)[-1]
+        if base in ('llama-server', 'llama-server.exe', 'ninfer-serve', 'ninfer-serve.exe'):
+            return True
+        # An explicit path (drive letter, UNC, absolute, or relative) is a
+        # command line; a bare word (no path separator) never is.
+        return ('/' in first_token or '\\' in first_token or
+                (len(first_token) > 2 and first_token[1] == ':'))
 
     def __init__(self, models_file_path):
         self.models_file_path = models_file_path
@@ -67,8 +96,10 @@ class ModelManager:
 
         grouped_models = defaultdict(list)
         current_model_name = ""
-        self._model_env_vars = {}  # temp storage during parsing
-        self._model_llamacppdirs = {}  # temp storage during parsing
+        # Temp storage during parsing: per-name LISTS, so that when a name is
+        # duplicated each occurrence keeps its own env:/llamacppdir: lines.
+        self._model_env_vars = defaultdict(list)
+        self._model_llamacppdirs = defaultdict(list)
 
         for i, line in enumerate(lines):
             line = line.strip()
@@ -76,49 +107,85 @@ class ModelManager:
                 continue
 
             # A line is considered a model name if it's not a command
-            is_command = line.lower().startswith('llama-server') or line.lower().startswith('ninfer-serve')
+            is_command = ModelManager._is_command_line(line)
             is_env_line = line.lower().startswith('env:')
             is_dir_line = line.lower().startswith('llamacppdir:')
 
             if not is_command and not is_env_line and not is_dir_line:
                 # And the next line *is* a command
-                next_line = lines[i + 1].strip().lower() if (i + 1 < len(lines)) else ""
-                if next_line.startswith('llama-server') or next_line.startswith('ninfer-serve'):
+                next_line = lines[i + 1].strip() if (i + 1 < len(lines)) else ""
+                if ModelManager._is_command_line(next_line):
                     current_model_name = line
             elif is_env_line and current_model_name:
                 # Capture env vars line (line 3: env:KEY=value)
-                self._model_env_vars[current_model_name] = line[4:].strip()  # strip 'env:' prefix
+                self._model_env_vars[current_model_name].append(line[4:].strip())  # strip 'env:' prefix
             elif is_dir_line and current_model_name:
                 # Capture llama.cpp directory line (llamacppdir: D:\path)
-                self._model_llamacppdirs[current_model_name] = line[len('llamacppdir:'):].strip()
+                self._model_llamacppdirs[current_model_name].append(line[len('llamacppdir:'):].strip())
             else:  # It is a command line
                 if current_model_name:
                     grouped_models[current_model_name].append(line)
 
-        # Process grouped models to handle potential duplicate names
+        # Process grouped models to handle potential duplicate names.
+        # Display name -> command, plus per-display-name env/dir metadata so a
+        # renamed duplicate keeps the env:/llamacppdir: lines of its own block.
         temp_models = {}
+        temp_env = {}
+        temp_dirs = {}
         for name, commands in grouped_models.items():
+            envs = self._model_env_vars.get(name, [])
+            dirs = self._model_llamacppdirs.get(name, [])
             if len(commands) == 1:
                 temp_models[name] = commands[0]
+                temp_env[name] = envs[0] if envs else ""
+                temp_dirs[name] = dirs[0] if dirs else ""
             else:
-                # If a name has multiple commands, append a suffix
+                # If a name has multiple commands, append a suffix so each
+                # occurrence gets a unique (and saveable) display name
                 base_name = name.split(' - ')[0].strip()
                 for i, cmd in enumerate(commands, 1):
-                    temp_models[f"{base_name} - Config {i}"] = cmd
+                    display_name = f"{base_name} - Config {i}"
+                    temp_models[display_name] = cmd
+                    temp_env[display_name] = envs[i - 1] if i - 1 < len(envs) else ""
+                    temp_dirs[display_name] = dirs[i - 1] if i - 1 < len(dirs) else ""
 
         # Sort by name and store in an OrderedDict
         self.models = OrderedDict(sorted(temp_models.items()))
         # Build env_vars dict (only for entries that had one)
         self.model_env_vars = OrderedDict(
-            (name, self._model_env_vars.get(name, ""))
+            (name, temp_env.get(name, ""))
             for name in self.models
         )
         # Build llamacppdirs dict (only for entries that had one)
         self.model_llamacppdirs = OrderedDict(
-            (name, self._model_llamacppdirs.get(name, ""))
+            (name, temp_dirs.get(name, ""))
             for name in self.models
         )
         return self.models
+
+    @staticmethod
+    def _find_model_name_line(lines, name):
+        """Find the index of the name line for a model in the raw file lines.
+
+        Handles display-renamed duplicates: a name like "Base - Config N" (created
+        by load_models when the file contains N identical "Base" names) maps back
+        to the N-th "Base" line in the file, which a plain exact-match search can
+        never find.
+        """
+        for i, line in enumerate(lines):
+            if line.strip() == name:
+                return i
+        m = re.match(r'^(.*)\s+-\s+Config\s+(\d+)$', name)
+        if m:
+            base = m.group(1).strip()
+            try:
+                n = int(m.group(2))
+            except ValueError:
+                return None
+            occurrences = [i for i, line in enumerate(lines) if line.strip() == base]
+            if 1 <= n <= len(occurrences):
+                return occurrences[n - 1]
+        return None
 
     @staticmethod
     def create_default_template(directory):
@@ -186,48 +253,52 @@ class ModelManager:
 
                 env_vars_text = getattr(self, 'env_vars_to_save', '')
                 llamacppdir_text = getattr(self, 'llamacppdir_to_save', '')
-                found = False
-                env_line_idx = None
-                dir_line_idx = None
-                for i, line in enumerate(lines):
-                    stripped = line.strip()
-                    if stripped == old_name:
-                        lines[i] = new_name + '\n'
-                        lines[i + 1] = new_command + '\n'
-                        found = True
-                        # Check for existing env: and llamacppdir: lines after the command
-                        for offset in range(2, 5):
-                            if i + offset < len(lines):
-                                check = lines[i + offset].strip().lower()
-                                if check.startswith('env:'):
-                                    env_line_idx = i + offset
-                                elif check.startswith('llamacppdir:'):
-                                    dir_line_idx = i + offset
-                        break
 
-                if not found:
+                # Locate the block. This also resolves display-renamed duplicates
+                # ("Base - Config N") back to their N-th occurrence in the file.
+                name_idx = self._find_model_name_line(lines, old_name)
+                if name_idx is None:
                     return False, f"Could not find original model '{old_name}' to update."
 
-                # FIX: Use the index we already located (i) instead of re-searching the
-                # file for new_command via list.index(). The old approach found the
-                # FIRST occurrence of an identical command string anywhere in the file,
-                # which silently corrupted the wrong model's block whenever two models
-                # happened to share the exact same command text. lines[i] is the name
-                # line and lines[i + 1] is the (just-updated) command line, so the next
-                # line to insert env/dir metadata after is i + 2.
-                base_idx = i + 2
+                lines[name_idx] = new_name + '\n'
+                # Replace the command line that follows the name; if the block is
+                # malformed (name at EOF or no command line), add one instead of
+                # clobbering an unrelated line.
+                if name_idx + 1 < len(lines) and ModelManager._is_command_line(lines[name_idx + 1]):
+                    lines[name_idx + 1] = new_command + '\n'
+                else:
+                    lines.insert(name_idx + 1, new_command + '\n')
+
+                # Locate this block's env:/llamacppdir: metadata lines (they follow
+                # the command line). A block may carry several env: lines; the first
+                # holds the value, any extras are cleared.
+                env_line_idxs = []
+                dir_line_idx = None
+                for offset in range(2, 5):
+                    j = name_idx + offset
+                    if j < len(lines):
+                        check = lines[j].strip().lower()
+                        if check.startswith('env:'):
+                            env_line_idxs.append(j)
+                        elif check.startswith('llamacppdir:'):
+                            dir_line_idx = j  # last one wins
+
+                base_idx = name_idx + 2
 
                 # Update or add env vars line
                 if env_vars_text:
-                    if env_line_idx is not None:
-                        lines[env_line_idx] = f"env:{env_vars_text}\n"
+                    if env_line_idxs:
+                        lines[env_line_idxs[0]] = f"env:{env_vars_text}\n"
+                        for extra in env_line_idxs[1:]:
+                            lines[extra] = ''  # drop duplicate env lines
                     else:
                         lines.insert(base_idx, f"env:{env_vars_text}\n")
                         base_idx += 1
                         if dir_line_idx is not None:
                             dir_line_idx += 1
-                elif env_line_idx is not None:
-                    lines[env_line_idx] = ''  # Clear env line
+                elif env_line_idxs:
+                    for j in env_line_idxs:
+                        lines[j] = ''  # Clear env line(s)
 
                 # Update or add llamacppdir line
                 if llamacppdir_text:
@@ -280,7 +351,7 @@ class ModelManager:
             end = name_idx + 1  # at minimum, the name line itself
             if end < n:
                 next_lower = lines[end].strip().lower()
-                if next_lower.startswith('llama-server') or next_lower.startswith('ninfer-serve'):
+                if ModelManager._is_command_line(next_lower):
                     end += 1  # include the command line
                     # Include env:/llamacppdir: lines belonging to this block only
                     while end < n:

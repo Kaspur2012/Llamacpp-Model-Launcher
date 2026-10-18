@@ -29,7 +29,6 @@ QRadioButton::indicator::checked, QCheckBox::indicator::checked {
     border: 1px solid #4A85C9;
     border-radius: 8px;
     background-color: #4A85C9; /* Highlight color */
-    image: url(Resources/check.png); /* A visual cue like a check or dot */
 }
 QCheckBox::indicator::checked {
     border-radius: 4px; /* Checkboxes are often square */
@@ -183,7 +182,7 @@ class SummaryPanel(QWidget):
         self.maximize_context_checkbox = QCheckBox("Maximize Context Size After Offload")
         self.maximize_context_checkbox.setToolTip(
             "Finds the largest possible context size (`-c`) that fits in your available memory for the chosen offload strategy.")
-        self.maximize_context_checkbox.stateChanged.connect(self._toggle_context_input)
+        self.maximize_context_checkbox.toggled.connect(self._toggle_context_input)
         
         self.safe_overhead_checkbox = QCheckBox("Ensure Safe Resource Overhead")
         self.safe_overhead_checkbox.setToolTip("After finding max limits, reduces context to ensure minimum free resources remain.")
@@ -248,7 +247,7 @@ class SummaryPanel(QWidget):
         self.auto_context_checkbox = QCheckBox("Auto (Max)")
         self.auto_context_checkbox.setChecked(True)
         self.auto_context_checkbox.setStyleSheet(WIDGET_STYLESHEET)
-        self.auto_context_checkbox.stateChanged.connect(self._toggle_spinbox_enabled)
+        self.auto_context_checkbox.toggled.connect(self._toggle_spinbox_enabled)
 
         self.target_context_spinbox = QSpinBox()
         self.target_context_spinbox.setRange(512, 1000000)
@@ -287,17 +286,15 @@ class SummaryPanel(QWidget):
         layout.addStretch()
         return container
 
-    def _toggle_context_input(self, state):
-        # Master toggle for the whole context section (checkbox logic)
-        # If Maximize is unchecked, we disable the target inputs entirely?
-        # Or do we treat it as "Just use this target context"?
-        # Current logic suggests the latter is useful.
-        # But for now, let's just enable/disable the widget container.
-        self.context_input_widget.setEnabled(state == 2)
+    def _toggle_context_input(self, checked):
+        # Master toggle for the whole context section: the Target Limit inputs
+        # only make sense when "Maximize Context" is on, so enable/disable them
+        # together. (toggled(bool): stable across Qt/PyQt versions.)
+        self.context_input_widget.setEnabled(checked)
 
-    def _toggle_spinbox_enabled(self, state):
-        # 2 is Checked (Auto), so Spinbox should be Disabled
-        self.target_context_spinbox.setDisabled(state == 2)
+    def _toggle_spinbox_enabled(self, checked):
+        # When Auto (Max) is checked, the spinbox is disabled
+        self.target_context_spinbox.setDisabled(checked)
 
     def populate(self, data):
         """Fills the summary panel and intelligently configures options based on analysis data."""
@@ -324,6 +321,9 @@ class SummaryPanel(QWidget):
             while self.gpu_selection_layout.count():
                 child = self.gpu_selection_layout.takeAt(0)
                 if child.widget():
+                    # Remove from the button group before deleting, otherwise the
+                    # group keeps holding a reference to the dead widget
+                    self.gpu_button_group.removeButton(child.widget())
                     child.widget().deleteLater()
 
             # Sort by Compute Capability (desc), then VRAM (desc)
@@ -347,6 +347,7 @@ class SummaryPanel(QWidget):
                 self.gpu_button_group.addButton(radio_button)
                 self.gpu_selection_layout.addWidget(radio_button)
 
+
         if not primary_gpu and gpus:
             primary_gpu = gpus[0]  # Fallback
 
@@ -355,8 +356,8 @@ class SummaryPanel(QWidget):
         add_row(self.model_summary_layout, "Model Layers", data.get('model_layers', 'N/A'))
         add_row(self.model_summary_layout, "Model Max Context", f"{data.get('model_max_context', 'N/A'):,}")
 
-        # Update Spinbox Max to Model Max
-        model_max = int(data.get('model_max_context', 32768))
+        # Update Spinbox Max to Model Max (clamped to the spinbox minimum)
+        model_max = max(512, int(data.get('model_max_context', 32768) or 512))
         self.target_context_spinbox.setMaximum(model_max)
         self.target_context_spinbox.setValue(model_max)  # Default if unchecked
 

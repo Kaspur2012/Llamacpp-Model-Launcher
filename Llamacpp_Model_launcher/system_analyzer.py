@@ -130,13 +130,27 @@ class SystemAnalyzer:
 
             yield f"> nvidia-smi found {len(output)} NVIDIA GPU(s)."
             for i, line in enumerate(output):
-                name, vram_total_mib, vram_used_mib = line.split(',')
-                total_gb = round(int(vram_total_mib.strip()) / 1024, 2)
-                used_gb = round(int(vram_used_mib.strip()) / 1024, 2)
+                parts = line.split(',')
+                # The last two fields are always the memory numbers; the name is
+                # everything before them (names may themselves contain commas).
+                if len(parts) < 3:
+                    yield f"  - Skipping malformed GPU line: {line}"
+                    continue
+                try:
+                    vram_total_mib = int(parts[-2].strip())
+                    vram_used_mib = int(parts[-1].strip())
+                except ValueError:
+                    yield f"  - Skipping malformed GPU line: {line}"
+                    continue
+                name = ",".join(parts[:-2]).strip()
+                total_gb = round(int(vram_total_mib) / 1024, 2)
+                used_gb = round(int(vram_used_mib) / 1024, 2)
                 free_gb = round(total_gb - used_gb, 2)
                 vram_details = {"total_gb": total_gb, "used_gb": used_gb, "free_gb": free_gb}
-                self.results["gpus"].append({"id": i, "name": name.strip(), "vram": vram_details})
-                yield f"  - GPU {i}: {name.strip()} ({total_gb} GB VRAM, {free_gb} GB free)"
+                # compute_cap is reported as 0.0 (unknown) on this path to match
+                # the key set of the pynvml path
+                self.results["gpus"].append({"id": i, "name": name, "vram": vram_details, "compute_cap": 0.0})
+                yield f"  - GPU {i}: {name} ({total_gb} GB VRAM, {free_gb} GB free)"
 
         except (FileNotFoundError, subprocess.CalledProcessError):
             yield "> nvidia-smi not found. Could not detect NVIDIA GPUs."

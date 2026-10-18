@@ -121,7 +121,7 @@ Then open a new terminal and type `llama-launcher` from anywhere.
 *   **"Load Model" does nothing**: Check your Llama.cpp Directory path. On macOS with Homebrew, this should be `/opt/homebrew/bin`.
 *   **Resource Guard keeps killing my model**: Your model is too big for your physical memory. Try a higher quantization (e.g., Q4 instead of Q8) or a smaller context size.
 *   **Tuning fails with "Soft Failure"**: The server launched but didn't output text. This often happens with incompatible CUDA versions (Windows) or corrupted model files.
-*   **macOS: Model path has spaces**: Paths with spaces (e.g., `/Volumes/My Drive/models/...`) are handled automatically. Use backslash-escaping in the models file (e.g., `My\ Drive`).
+*   **Model path has spaces**: Both quoted (`-m "/Volumes/My Drive/models/Qwen.gguf"`) and unquoted (`-m /Volumes/My Drive/models/Qwen.gguf`) paths with spaces work — no backslash-escaping needed (that would insert a literal backslash into the path).
 
 ### 9. Some stuff about -ot command
 ## Mastering `llamacpp`'s `-ot` Command for Optimized Performance
@@ -626,6 +626,121 @@ NINFER_PARAMETERS = [
         "collapsed": True,
         "parameters": [
             {'name': 'Verbose', 'id': 'verbose', 'type': 'checkbox', 'default': False, 'description': 'Enable verbose logging output', 'prefix': '--verbose'},
+        ]
+    },
+]
+
+# Strata (serve/server.py wrapper around strata.exe) specific parameters.
+# The wrapper command is: python.exe <root>\serve\server.py --engine strata --config <json> --port 8081
+# The Executable (python) and Serve Script rows are positional and already in the editor.
+# The engine's own tuning (args, sampling, vision, ...) lives inside the JSON config file,
+# NOT in these flags — edit the JSON, the launcher only picks which config to use.
+STRATA_PARAMETERS = [
+    {
+        "name": "Engine & Config",
+        "collapsed": False,
+        "parameters": [
+            {'name': 'Engine', 'id': 'engine', 'type': 'select', 'default': 'strata', 'options': ['strata', 'mock'], 'description': 'serve/server.py engine backend (default: mock — Strata profiles must use strata)', 'prefix': '--engine'},
+            {'name': 'Config File', 'id': 'config', 'type': 'text', 'default': '', 'description': 'Path to the Strata JSON config (exe, args, sampling, vision, gpu...). Written by setup.py. A *greedy* config is regenerated from the live one at launch when make-greedy-config.py sits next to it.', 'prefix': '--config'},
+        ]
+    },
+    {
+        "name": "Server Parameters",
+        "collapsed": True,
+        "parameters": [
+            {'name': 'Host', 'id': 'host', 'type': 'text', 'default': '127.0.0.1', 'description': 'Address to listen on: 127.0.0.1 = this PC only (the default), 0.0.0.0 = also other devices on your network (set an API key)', 'prefix': '--host'},
+            {'name': 'Port', 'id': 'port', 'type': 'number', 'default': '8081', 'description': 'Port to listen on (serve/server.py default: 8095; the Strata bats use 8081)', 'prefix': '--port'},
+            {'name': 'API Key', 'id': 'api-key', 'type': 'text', 'default': '', 'description': 'Require this key on /v1/* (Authorization: Bearer ... or x-api-key). Several keys: separate with commas', 'prefix': '--api-key'},
+            {'name': 'Open Browser', 'id': 'open', 'type': 'checkbox', 'default': False, 'description': 'Open the local Strata page in the browser once the model is ready', 'prefix': '--open'},
+            {'name': 'API Monitor', 'id': 'api-monitor', 'type': 'checkbox', 'default': False, 'description': 'Enable the API request monitor at /api-monitor (keeps the last 100 requests in memory)', 'prefix': '--api-monitor'},
+            {'name': 'MCP Config', 'id': 'mcp-config', 'type': 'text', 'default': '', 'description': 'JSON file with MCP servers in Claude Desktop format ({"mcpServers": {...}}); the web app chat can use their tools', 'prefix': '--mcp-config'},
+        ]
+    },
+    {
+        "name": "GPU & Memory Parameters",
+        "collapsed": True,
+        "parameters": [
+            {'name': 'GPU', 'id': 'gpu', 'type': 'text', 'default': '', 'description': 'GPU to run on, as nvidia-smi numbers them, or several for a layer split ("0,2")', 'prefix': '--gpu'},
+            {'name': 'Min Free VRAM', 'id': 'min-free-vram-mib', 'type': 'number', 'default': '', 'description': 'Load an unloaded model only when this much VRAM is free, else answer 503 (default: always load)', 'prefix': '--min-free-vram-mib'},
+            {'name': 'Idle Unload', 'id': 'idle-unload', 'type': 'number', 'default': '', 'description': 'Unload the model after this many seconds without requests so other programs can use the VRAM; the next request loads it again (default: never)', 'prefix': '--idle-unload'},
+            {'name': 'Fit Max Tokens', 'id': 'fit-max-tokens', 'type': 'checkbox', 'default': False, 'description': 'Clamp max_tokens to the remaining context instead of rejecting the request with 400', 'prefix': '--fit-max-tokens'},
+            {'name': 'Lazy Start', 'id': 'lazy', 'type': 'checkbox', 'default': False, 'description': 'Start the API unloaded: the engine and the vision encoder start with the first request', 'prefix': '--lazy'},
+        ]
+    },
+    {
+        "name": "Advanced Parameters",
+        "collapsed": True,
+        "parameters": [
+            {'name': 'Before Load', 'id': 'before-load', 'type': 'text', 'default': '', 'description': 'A command run before the model is loaded again (e.g. to unload another server\'s model)', 'prefix': '--before-load'},
+            {'name': 'Slot Save Path', 'id': 'slot-save-path', 'type': 'text', 'default': '', 'description': 'Enable POST /slots/0?action=save|restore (llama-server style API): save/restore the conversation to/from this directory', 'prefix': '--slot-save-path'},
+            {'name': 'Replicas', 'id': 'replicas', 'type': 'number', 'default': '', 'description': 'Data-parallel replicas: cut the gpu list into N equal groups, one engine each, requests spread over them', 'prefix': '--replicas'},
+            {'name': 'Tokenizer', 'id': 'tokenizer', 'type': 'text', 'default': '', 'description': 'Pack tokenizer directory (falls back to a byte tokenizer if absent). Usually set inside the JSON config instead', 'prefix': '--tokenizer'},
+        ]
+    },
+]
+
+# strata.exe engine flags — these live in the config JSON's "args" array, NOT on
+# the serve/server.py command line. 'target': 'strata_args' routes browser adds
+# into the Strata Config panel's Engine Args section. Descriptions condensed from
+# `strata.exe --help`.
+STRATA_ENGINE_ARGS = [
+    {
+        "name": "Engine Args — Context & KV",
+        "collapsed": True,
+        "parameters": [
+            {'name': 'Max Context', 'id': 'e-max-context', 'type': 'number', 'default': '256000', 'description': 'Maximum context size in tokens; the whole context is allocated at start unless --kv-grow', 'prefix': '--max-context', 'target': 'strata_args'},
+            {'name': 'KV Storage', 'id': 'e-kv', 'type': 'select', 'default': 'fp16', 'options': ['fp16', 'int8', 'q4_0', 'k8v4'], 'description': 'KV storage: fp16 (default); int8 = half the VRAM; q4_0 = half of int8 after Hadamard rotation; k8v4 = INT8 K + rotated Q4_0 V (816 B/cell)', 'prefix': '--kv', 'target': 'strata_args'},
+            {'name': 'KV Grow', 'id': 'e-kv-grow', 'type': 'checkbox', 'default': False, 'description': 'K/V takes VRAM only for the cells requests reach; expert cache holds the rest and gives slots back as context grows (one GPU, with --expert-profile)', 'prefix': '--kv-grow', 'target': 'strata_args'},
+            {'name': 'KV Resident', 'id': 'e-kv-resident', 'type': 'number', 'default': '', 'description': 'KV streaming: keep N cells of each QSA layer in VRAM (min 20480), whole K/V in pinned RAM; freed VRAM goes to expert slots. 0 = all in VRAM', 'prefix': '--kv-resident', 'target': 'strata_args'},
+            {'name': 'VRAM Reserve', 'id': 'e-vram-reserve-mib', 'type': 'number', 'default': '1536', 'description': 'MiB of VRAM left free on the card', 'prefix': '--vram-reserve-mib', 'target': 'strata_args'},
+        ]
+    },
+    {
+        "name": "Engine Args — Model & PLE",
+        "collapsed": True,
+        "parameters": [
+            {'name': 'Pack', 'id': 'e-pack', 'type': 'text', 'default': '', 'description': 'The pack directory (default pack/full)', 'prefix': '--pack', 'target': 'strata_args'},
+            {'name': 'Native Shards', 'id': 'e-native', 'type': 'text', 'default': '', 'description': 'The full-context native GGUF shard(s)', 'prefix': '--native', 'target': 'strata_args'},
+            {'name': 'PLE GGUF', 'id': 'e-ple-gguf', 'type': 'text', 'default': '', 'description': 'Required PLE table (original second GGUF shard); holds per_layer_token_embd.weight', 'prefix': '--ple-gguf', 'target': 'strata_args'},
+            {'name': 'PLE IO', 'id': 'e-ple-io', 'type': 'select', 'default': 'ram', 'options': ['direct', 'mmap', 'ram'], 'description': 'n-gram table reads: direct = unbuffered SSD (table never in RAM); mmap = A/B arm; ram = whole table locked in RAM (no SSD read on the token path)', 'prefix': '--ple-io', 'target': 'strata_args'},
+            {'name': 'PLE Row Cache', 'id': 'e-ple-row-cache', 'type': 'number', 'default': '', 'description': 'Bounded cache of fetched rows, 90 B each (default 1048576; 0 = off)', 'prefix': '--ple-row-cache', 'target': 'strata_args'},
+            {'name': 'PLE Inflight', 'id': 'e-ple-inflight', 'type': 'number', 'default': '', 'description': 'Outstanding SSD reads (default 256)', 'prefix': '--ple-inflight', 'target': 'strata_args'},
+        ]
+    },
+    {
+        "name": "Engine Args — Speculative (MTP)",
+        "collapsed": True,
+        "parameters": [
+            {'name': 'MTP Model', 'id': 'e-mtp', 'type': 'text', 'default': '', 'description': 'MTP draft model directory', 'prefix': '--mtp', 'target': 'strata_args'},
+            {'name': 'Spec Depth', 'id': 'e-spec', 'type': 'number', 'default': '4', 'description': 'Speculative draft depth', 'prefix': '--spec', 'target': 'strata_args'},
+            {'name': 'Spec Min P', 'id': 'e-spec-min-p', 'type': 'number', 'default': '0.65', 'description': 'Minimum draft token probability to keep for speculation', 'prefix': '--spec-min-p', 'target': 'strata_args'},
+            {'name': 'MTP HNorm', 'id': 'e-mtp-hnorm', 'type': 'text', 'default': 'stream', 'description': 'MTP head normalization path (e.g. stream)', 'prefix': '--mtp-hnorm', 'target': 'strata_args'},
+        ]
+    },
+    {
+        "name": "Engine Args — Expert Cache & Adaptive",
+        "collapsed": True,
+        "parameters": [
+            {'name': 'Expert Cache', 'id': 'e-expert-cache', 'type': 'text', 'default': 'auto', 'description': 'Routed-expert cache mode (auto = sized from VRAM)', 'prefix': '--expert-cache', 'target': 'strata_args'},
+            {'name': 'Expert Profile', 'id': 'e-expert-profile', 'type': 'text', 'default': '', 'description': 'Learned expert-routing profile file (drives adaptive swaps)', 'prefix': '--expert-profile', 'target': 'strata_args'},
+            {'name': 'Adapt Every', 'id': 'e-adapt-every', 'type': 'number', 'default': '1', 'description': 'Adaptive expert tier: swap round cadence', 'prefix': '--adapt-every', 'target': 'strata_args'},
+            {'name': 'Adapt Swaps', 'id': 'e-adapt-swaps', 'type': 'number', 'default': '160', 'description': 'Adaptive expert tier: swaps per round', 'prefix': '--adapt-swaps', 'target': 'strata_args'},
+            {'name': 'Adapt Decay', 'id': 'e-adapt-decay', 'type': 'number', 'default': '0.97', 'description': 'Decay of the routing counters driving swaps', 'prefix': '--adapt-decay', 'target': 'strata_args'},
+            {'name': 'Adapt Async', 'id': 'e-adapt-async', 'type': 'number', 'default': '1', 'description': '1: swaps advance between verify windows (not bit-exact run to run); 0 = blocking tier', 'prefix': '--adapt-async', 'target': 'strata_args'},
+            {'name': 'Adapt Min Gain', 'id': 'e-adapt-min-gain', 'type': 'number', 'default': '', 'description': 'Swap an expert in only when its decayed routing count beats the replaced one by more than F (default 1.5; higher = fewer, surer swaps)', 'prefix': '--adapt-min-gain', 'target': 'strata_args'},
+            {'name': 'Pool Workers', 'id': 'e-pool-workers', 'type': 'number', 'default': '8', 'description': 'CPU expert pool worker threads', 'prefix': '--pool-workers', 'target': 'strata_args'},
+        ]
+    },
+    {
+        "name": "Engine Args — Prefill, Cache & GPU",
+        "collapsed": True,
+        "parameters": [
+            {'name': 'Prefill', 'id': 'e-prefill', 'type': 'text', 'default': 'auto:32768', 'description': 'Prefill chunking (auto:NNNNN)', 'prefix': '--prefill', 'target': 'strata_args'},
+            {'name': 'Conversation Cache', 'id': 'e-conversation-cache-mib', 'type': 'number', 'default': '8192', 'description': 'Conversation (prompt) cache size in MiB', 'prefix': '--conversation-cache-mib', 'target': 'strata_args'},
+            {'name': 'Conversation Slots', 'id': 'e-conversation-cache-slots', 'type': 'number', 'default': '4', 'description': 'Conversations kept in the cache', 'prefix': '--conversation-cache-slots', 'target': 'strata_args'},
+            {'name': 'Host Core', 'id': 'e-host-core', 'type': 'text', 'default': 'last', 'description': 'Pin the host thread to a core policy (e.g. last)', 'prefix': '--host-core', 'target': 'strata_args'},
+            {'name': 'Vision', 'id': 'e-vision', 'type': 'checkbox', 'default': True, 'description': 'Enable the vision encoder (needs the vision block in the config)', 'prefix': '--vision', 'target': 'strata_args'},
+            {'name': 'GPU', 'id': 'e-gpu', 'type': 'text', 'default': '', 'description': 'GPUs to run on, comma-separated nvidia-smi/PCI indices (sets CUDA_VISIBLE_DEVICES inside the engine)', 'prefix': '--gpu', 'target': 'strata_args'},
         ]
     },
 ]

@@ -3,7 +3,8 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLineEdit, QScrollArea, QFrame,
                              QPushButton, QHBoxLayout, QLabel, QCheckBox, QComboBox)
 from PyQt6.QtCore import Qt, pyqtSignal
-from Llamacpp_Model_launcher.parameters_db import LLAMA_CPP_PARAMETERS, NINFER_PARAMETERS
+from Llamacpp_Model_launcher.parameters_db import (LLAMA_CPP_PARAMETERS, NINFER_PARAMETERS,
+                                                   STRATA_PARAMETERS, STRATA_ENGINE_ARGS)
 from .styles import PARAMETER_BROWSER_STYLES
 
 
@@ -43,30 +44,39 @@ class ParameterBrowser(QWidget):
         scroll_area.setWidget(scroll_content)
 
         self.browser_param_rows.clear()
-        self._is_ninfer_mode = False  # Default to Llama.cpp mode
+        self._engine_mode = 'llama'  # Default to Llama.cpp mode
         for group in LLAMA_CPP_PARAMETERS:
             self._create_group_box(group)
 
-    def set_mode(self, is_ninfer: bool):
-        """Switch between Llama.cpp and NInfer parameter sets.
-        
+    def set_mode(self, engine):
+        """Switch between Llama.cpp, NInfer and Strata parameter sets.
+
         Args:
-            is_ninfer: True to show NInfer parameters, False for Llama.cpp.
+            engine: 'llama', 'ninfer' or 'strata'. A bool is also accepted
+            for backwards compatibility (True = 'ninfer', False = 'llama').
         """
-        if self._is_ninfer_mode == is_ninfer:
+        if isinstance(engine, bool):
+            engine = 'ninfer' if engine else 'llama'
+        if self._engine_mode == engine:
             return  # No change needed
-        
-        self._is_ninfer_mode = is_ninfer
+
+        self._engine_mode = engine
         self.browser_param_rows.clear()
-        
+
         # Clear existing group boxes
         while self.browser_layout.count():
             child = self.browser_layout.takeAt(0).widget()
             if child:
                 child.deleteLater()
-        
+
         # Populate with the correct parameter set
-        params = NINFER_PARAMETERS if is_ninfer else LLAMA_CPP_PARAMETERS
+        if engine == 'strata':
+            # serve/server.py flags + strata.exe engine args (config JSON)
+            params = STRATA_PARAMETERS + STRATA_ENGINE_ARGS
+        elif engine == 'ninfer':
+            params = NINFER_PARAMETERS
+        else:
+            params = LLAMA_CPP_PARAMETERS
         for group in params:
             self._create_group_box(group)
 
