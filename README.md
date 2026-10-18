@@ -299,7 +299,7 @@ You can create your own model_file.txt from scratch or save the model_file_examp
     *   Release EXE is `run_app.exe` (rebuilt in `dist\`)
 	*	Note: the example for strata is my own which I have ngram to ram because I have enough ram to do so. If you do not, make sure to change it so it load to ssd. Though by loading your json, it should load all your current config.
 
-    > 🤖 All changes implemented by Deekseek Harness with Qwen3.8-Flash-Next IQ3_S (running on Strata)
+    > 🤖 All changes implemented by Deekseek Harness with Qwen3.8-Flash-Next IQ3_S (running Strata on this launcher)
 
 *   08/18/2026 -
     *   **Critical fix: deleting a profile wiped the env vars of other profiles** — after deleting any profile, most of the *other* profiles lost their environment variables and had to be re-added/saved manually.
