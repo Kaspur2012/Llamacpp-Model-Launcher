@@ -1,0 +1,76 @@
+
+([0-9]|[1-9][0-9]).ffn_gate.weight=CUDA0 -ot blk.
+([0-9]|[1-9][0-9]).ffn_up.weight=CUDA0 -ot blk.
+([0-9]|[1-9][0-9]).ffn_down.weight=CUDA0
+([0-9]|[1-9][0-9]).ffn_gate.weight=CUDA0 -ot blk.
+([0-9]|[1-9][0-9]).ffn_up.weight=CUDA0 -ot blk.
+([0-9]|[1-9][0-9]).ffn_down.weight=CUDA0
+
+
+Qwen3.6-27B-UD-Q5_K_XL_MTP_200K-MultiGPU-Tensor
+llama-server.exe -m D:/backup_models/llm/Qwen3.6-27B-UD-Q5_K_XL.gguf --jinja --temp 0.6 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode tensor --spec-draft-n-max 3 -c 185000 --spec-default --chat-template-file D:\backup_models\llm\qwen36_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true}" -ts 0.840,0.160 -ctk q8_0 -ctv q8_0 --mmproj D:/backup_models/llm/mmproj-BF16.gguf
+env:MTMD_BACKEND_DEVICE=cuda1
+
+
+gemma-4-31B-it-qat-UD-Q4_K_XL
+llama-server.exe -m D:/backup_models/llm/gemma-4-31B-it-qat-UD-Q4_K_XL.gguf -c 70000 --jinja --temp 1 --top-k 64 --top-p 0.95 --min-p 0.05 --spec-draft-n-max 3 --spec-type draft-mtp --no-warmup -ngl 99 -md D:/backup_models/llm/mtp-gemma-4-31B-it.gguf --spec_default -fit off -mg 0 --split-mode none -ctk q8_0 -ctv q8_0 -np 1 --flash-attn on -ngld 99 -devd CUDA0 --mmproj D:/backup_models/llm/gemma4_31b_mmproj-F16.gguf --load-mode mmap
+
+
+
+
+
+
+Qwen3.8-27B-UD-Q6_K_XL_MTP_85K-MultiGPU-Tensor
+llama-server.exe -m D:/backup_models/llm/Qwen3_8/Qwen3.8-27B-UD-Q6_K_XL.gguf --jinja --temp 1.0 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode tensor --spec-draft-n-max 3 -c 85000 --spec-default --chat-template-file "D:/backup_models/llm/Qwen3_8/Qwen 3.8 improved chat template.jinja" --chat-template-kwargs "{\"preserve_thinking\": true, \"reasoning_effort\":\"xhigh\"}" -ts 0.815,0.185 -ctk q8_0 -ctv q8_0 --mmproj D:/backup_models/llm/Qwen3_8/mmproj-F16.gguf
+env:MTMD_BACKEND_DEVICE=cuda1
+
+Qwen3.6-27B-UD-Q5_K_XL_MTP_F16_125K-MultiGPU-Tensor
+llama-server.exe -m D:/backup_models/llm/Qwen3.6-27B-UD-Q5_K_XL.gguf --jinja --temp 0.6 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode tensor --spec-draft-n-max 3 -c 125000 --spec-default --chat-template-file D:\backup_models\llm\qwen36_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true}" -ts 0.820,0.180 --mmproj D:/backup_models/llm/mmproj-BF16.gguf
+env:MTMD_BACKEND_DEVICE=cuda1
+
+
+NInfer-qwen3_8_27b_no_vision_155k
+ninfer-serve.exe D:/backup_models/llm/qwen3_8_27b.ninfer --host 127.0.0.1 --port 8080 --max-context 155000 --kv-dtype int8 --lm-head-draft --no-cuda-graph --default-max-tokens 32768 --max-concurrency 2 --pending-timeout-ms 600000 --max-pending-requests 16 --prefill-chunk 1024 --spec mtp --draft-tokens 3 --request-log-jsonl D:/llamacpp/ninfer_novision_req.jsonl --model-id "qwen3.8-27b No Vision" --preserve-thinking
+
+Muse-Glimmer-30B-UD-Q5_K_XL_ 110K_F16_KV
+llama-server.exe -m D:/backup_models/llm/Muse/Muse-Glimmer-30B-UD-Q5_K_XL.gguf --jinja --temp 1 --top-k 64 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-dflash,ngram-simple -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode none -c 111000 --spec-default --chat-template-kwargs "{\"preserve_thinking\": true}" --mmproj D:/backup_models/llm/Muse/mmproj-kquant.gguf --spec-draft-model D:\backup_models\llm\Muse\dflash-kquant.gguf --spec-draft-n-max 15 -ctk f16 -ctv f16
+
+Muse-Glimmer-30B-UD-Q6_K_XL_ 131K_F16_KV
+llama-server.exe -m D:/backup_models/llm/Muse/Muse-Glimmer-30B-UD-Q6_K_XL.gguf --jinja --temp 1 --top-k 64 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-dflash,ngram-simple -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode layer -c 131000 --spec-default --chat-template-kwargs "{\"preserve_thinking\": true}" --mmproj D:/backup_models/llm/Muse/mmproj-kquant.gguf --spec-draft-model D:\backup_models\llm\Muse\dflash-kquant.gguf --spec-draft-n-max 15 -ts 0.850,0.150
+
+Qwen3.8-27B-UD-Q5_K_XL
+llama-server.exe -m D:/backup_models/llm/Qwen3_8/Qwen3.8-27B-UD-Q5_K_XL_OLD.gguf --jinja --temp 1.0 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp,ngram-mod -np 1 -fit off --flash-attn on -mg 0 --split-mode none --spec-draft-n-max 3 -c 100000 --spec-default --chat-template-file D:/backup_models/llm/Qwen3_8/sharp_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true, \"reasoning_effort\":\"xhigh\"}" -ctk q8_0 -ctv q8_0 --mmproj D:/backup_models/llm/Qwen3_8/mmproj-F16.gguf --top_p 0.95 --load-mode none --port 8080
+env:MTMD_BACKEND_DEVICE=cuda1
+
+NInfer-qwen3_8_27b_vision_102k
+ninfer-serve.exe D:/backup_models/llm/qwen3_8_27b.ninfer --host 127.0.0.1 --port 8080 --max-context 102000 --kv-dtype int8 --lm-head-draft --default-max-tokens 102000 --max-concurrency 1 --pending-timeout-ms 600000 --max-pending-requests 16 --prefill-chunk 1024 --spec mtp --draft-tokens 3 --request-log-jsonl D:/llamacpp/ninfer_vision_req.jsonl --vision --model-id "qwen3.8-27b Vision" --preserve-thinking --image-max-tokens 1024
+llamacppdir: D:/llamacpp/ninfer-rtx3090-windows-x64-0.6.0-rtx3090
+
+Qwen3.8-27B-MQ-Q5_K_S_1_125K
+llama-server.exe -m D:/backup_models/llm/Qwen3_8/Qwen3.8-27B-MQ-Q5_K_S_1.gguf --jinja --temp 1.0 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp,ngram-mod -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode none --spec-draft-n-max 3 -c 125000 --spec-default --chat-template-file D:/backup_models/llm/Qwen3_8/sharp_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true, \"reasoning_effort\":\"xhigh\"}" -ctk q8_0 -ctv q8_0 --mmproj D:/backup_models/llm/Qwen3_8/mmproj-F16.gguf --top_p 0.95
+env:MTMD_BACKEND_DEVICE=cuda1
+
+Qwen3.8-27B-MQ-Q5_K_3_100K
+llama-server.exe -m D:/backup_models/llm/Qwen3_8/Qwen3.8-27B-MQ-Q5_K_3.gguf --jinja --temp 1.0 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp,ngram-mod -np 1 -fit off --flash-attn on --no-mmap -mg 0 --split-mode none --spec-draft-n-max 3 -c 100000 --spec-default --chat-template-file D:/backup_models/llm/Qwen3_8/sharp_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true, \"reasoning_effort\":\"xhigh\"}" -ctk q8_0 -ctv q8_0 --mmproj D:/backup_models/llm/Qwen3_8/mmproj-F16.gguf --top_p 0.95
+env:MTMD_BACKEND_DEVICE=cuda1
+
+
+Qwen3.8-27B-GSQ-RCO-IQ3_S-mtp
+llama-server.exe -m D:/backup_models/llm/Qwen3_8/GSQ-RCO/Qwen3.8-27B-GSQ-RCO-IQ3_S-mtp.gguf --jinja --temp 1.0 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp,ngram-mod -np 1 -fit off --flash-attn on -mg 0 --split-mode none --spec-draft-n-max 3 -c 165000 --spec-default --chat-template-file D:/backup_models/llm/Qwen3_8/sharp_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true, \"reasoning_effort\":\"xhigh\"}" -ctk f16 -ctv f16 --mmproj D:/backup_models/llm/Qwen3_8/GSQ-RCO/mmproj-Qwen3.8-27B-BF16.gguf --top_p 0.95 --load-mode none
+env:MTMD_BACKEND_DEVICE=cuda1
+
+Swift-Qwen3.8-27B-Q5_K_M
+llama-server.exe -m D:/backup_models/llm/Qwen3_8/Swift-Qwen3.8-27B-Q5_K_M.gguf --jinja --temp 1.0 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp,ngram-mod -np 1 -fit off --flash-attn on -mg 0 --split-mode none --spec-draft-n-max 3 -c 100000 --spec-default --chat-template-file D:/backup_models/llm/Qwen3_8/sharp_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true, \"reasoning_effort\":\"xhigh\"}" -ctk q8_0 -ctv q8_0 --mmproj D:/backup_models/llm/Qwen3_8/mmproj-F16.gguf --top_p 0.95 --load-mode mmap
+env:MTMD_BACKEND_DEVICE=cuda1
+
+Qwen3.8-27B-UD-Q5_K_XL_Ampere
+llama-server.exe -m D:/backup_models/llm/Qwen3_8/Qwen3.8-27B-UD-Q5_K_XL_OLD.gguf --jinja --temp 1.0 --top-k 20 --min-p 0.0 --no-warmup -ngl 99 --spec-type draft-mtp,ngram-mod -np 1 -fit off --flash-attn on -mg 0 --split-mode none --spec-draft-n-max 3 -c 90000 --spec-default --chat-template-file D:/backup_models/llm/Qwen3_8/sharp_chat_template.jinja --chat-template-kwargs "{\"preserve_thinking\": true, \"reasoning_effort\":\"xhigh\"}" -ctk q8_0 -ctv q8_0 --mmproj D:/backup_models/llm/Qwen3_8/mmproj-F16.gguf --top_p 0.95 --load-mode mmap --cache-prompt --cache-ram 8192 --ctx-checkpoints 24 --checkpoint-min-step 10240 --spec-draft-p-min 0 --spec-draft-vocab-map D:\llamacpp\Release\atx_65536.txt
+env:MTMD_BACKEND_DEVICE=cuda1
+
+Strata-Qwen3-IQ3_S
+D:\llamacpp\strata-qwen-iq3s-m6b2\.venv\Scripts\python.exe D:\llamacpp\strata-qwen-iq3s-m6b2\serve\server.py --engine strata --config D:\llamacpp\strata-qwen-iq3s-m6b2\strata-iq3_s.json --port 8081
+llamacppdir: D:/llamacpp/strata-qwen-iq3s-m6b2
+
+Strata-Qwen3-IQ3_S-Greedy
+D:\llamacpp\strata-qwen-iq3s-m6b2\.venv\Scripts\python.exe D:\llamacpp\strata-qwen-iq3s-m6b2\serve\server.py --engine strata --config D:\llamacpp\strata-qwen-iq3s-m6b2\strata-iq3_s_greedy.json --port 8081
+llamacppdir: D:/llamacpp/strata-qwen-iq3s-m6b2
