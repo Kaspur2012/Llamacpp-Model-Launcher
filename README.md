@@ -280,6 +280,7 @@ You can create your own model_file.txt from scratch or save the model_file_examp
 ##   Change Log
 
 *   10/18/2026 -
+    *  **Reasons** — so I have upgraded my ram to 128gb and able to play around with Qwen 3.8 Flash next model, particularly using Strata running Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S from ISTA-DASLab. So I figure why not add this to this launcher so I can see all the config/parameters from the json file. I managed to run it fine on my system, window 10. as for other os, I am not able to test. You can copy my own models txt file, particularly the strata profiles(greedy and non greedy) and manipulate it from there to start if ya want.
     *   **Strata inference engine support** — full integration of the Strata engine (`serve/server.py` wrapper + `strata.exe`) alongside Llama.cpp and NInfer, with two example profiles (`Strata-Qwen3-IQ3_S` and `Strata-Qwen3-IQ3_S-Greedy`) in the default template
         *   Launches the venv Python + `serve\server.py --engine strata --config <json> --port 8081` directly — no .bat files, no UAC prompt; 2 MB large pages are enabled per launch after a one-time elevated run of the new `grant-large-pages.ps1` (+ log off/on); falls back to 4 KB pages with a log warning until then
         *   **Strata Config (JSON) editor** — a new section under the parameter editor mirrors the profile's own config file exactly as editable rows: **Engine Args** (the `strata.exe` flags inside the JSON), **Sampling**, **Config Settings**, **Vision**, **Engine Environment** — with add/remove per row and type-preserving save
