@@ -861,6 +861,7 @@ class MainWindow(QWidget):
                     QMessageBox.critical(self, "Config Save Failed",
                                          f"Could not write the Strata config:\n\n{err}\n\nNothing was saved.")
                     return False
+                self.right_panel.mark_strata_config_clean()
                 strata_note = (f"\nStrata config saved: {cfg_path}"
                                f"\n(previous file kept as {cfg_path}.bak)")
         env_vars_text = self.right_panel.get_env_vars()
@@ -882,6 +883,19 @@ class MainWindow(QWidget):
         else:
             QMessageBox.critical(self, "Error", message)
             return False
+
+    def _write_strata_config_for_launch(self):
+        """Writes the Strata config editor state to its JSON file (with .bak
+        backup) so a launch starts from exactly what the editor shows — the
+        same contract llama.cpp profiles have (launch from the editor, not
+        from the saved file). Returns (ok, error_message)."""
+        cfg = self.right_panel.get_strata_config()
+        if cfg is None:
+            return True, ""
+        ok, err = save_config(self.right_panel.strata_config_path(), cfg)
+        if ok:
+            self.right_panel.mark_strata_config_clean()
+        return ok, err
 
     def duplicate_model(self):
         if self.is_dirty and QMessageBox.question(self, 'Unsaved Changes', "Save changes first?",
@@ -1136,6 +1150,19 @@ class MainWindow(QWidget):
                                              + (msg.splitlines()[-1] if msg else config_path))
             else:
                 self._pending_strata_note = ""
+            # Unsaved Strata config edits are LIVE at launch (same as llama.cpp
+            # parameters launching from the editor, not from models.txt): write
+            # the editor state to the config file before starting the server.
+            if self.right_panel.strata_config_is_dirty():
+                ok, err = self._write_strata_config_for_launch()
+                if not ok:
+                    QMessageBox.critical(self, "Strata Launch Aborted",
+                                         f"Could not write the unsaved config changes to the config file:\n\n{err}")
+                    return
+                note = ("[STRATA] Unsaved config edits written to "
+                        + str(self.right_panel.strata_config_path())
+                        + " (previous file kept as .bak)")
+                self._pending_strata_note = (self._pending_strata_note + "\n" + note) if self._pending_strata_note else note
 
         # Display string for the log (properly quoted for the platform)
         command_str = subprocess.list2cmdline(args_list) if IS_WINDOWS else shlex.join(args_list)

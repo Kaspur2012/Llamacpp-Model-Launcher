@@ -235,6 +235,13 @@ class RightPanel(QWidget):
     def strata_config_path(self):
         return self.strata_panel.config_path()
 
+    def strata_config_is_dirty(self):
+        """True when the Strata config editor holds unsaved changes."""
+        return self.strata_panel.is_dirty()
+
+    def mark_strata_config_clean(self):
+        self.strata_panel.mark_clean()
+
     def add_strata_arg(self, flag, value):
         self.strata_panel.add_arg(flag, value)
 

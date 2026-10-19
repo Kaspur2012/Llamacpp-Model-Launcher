@@ -31,6 +31,7 @@ class StrataConfigPanel(QWidget):
         self._loaded = False
         self._rows = {}       # section -> list of (key, input_widget)
         self._inputs = {}     # section -> list of input widgets (for reading back)
+        self._dirty = False   # edits made since the file was (re)loaded/saved
         self.row_changed_callback = None
         self._setup_ui()
 
@@ -138,9 +139,17 @@ class StrataConfigPanel(QWidget):
             for row in rows:
                 self._add_row(key, row.key, row.value)
         self._loaded = True
+        self._dirty = False
 
     def is_loaded(self):
         return self._loaded
+
+    def is_dirty(self):
+        """True when the editor holds changes not yet written to the file."""
+        return self._dirty
+
+    def mark_clean(self):
+        self._dirty = False
 
     # ------------------------------------------------------------------ rows
 
@@ -173,10 +182,13 @@ class StrataConfigPanel(QWidget):
             if section == 'args':
                 input_widget.setPlaceholderText("(flag — leave empty)")
         if hasattr(self, 'row_changed_callback') and self.row_changed_callback:
+            def _note_change():
+                self._dirty = True
+                self.row_changed_callback()
             if isinstance(input_widget, QCheckBox):
-                input_widget.stateChanged.connect(self.row_changed_callback)
+                input_widget.stateChanged.connect(_note_change)
             else:
-                input_widget.textChanged.connect(self.row_changed_callback)
+                input_widget.textChanged.connect(_note_change)
         remove_button = QPushButton("X")
         remove_button.setFixedWidth(26)
         remove_button.setToolTip(f"Remove {key}")
@@ -208,6 +220,7 @@ class StrataConfigPanel(QWidget):
                         sub_item.widget().deleteLater()
                 layout.removeItem(item)
                 break
+        self._dirty = True
         if self.row_changed_callback:
             self.row_changed_callback()
 
@@ -223,12 +236,14 @@ class StrataConfigPanel(QWidget):
         self._add_row(section, key, value)
         self._section_name_inputs[section].clear()
         self._section_value_inputs[section].clear()
+        self._dirty = True
         if self.row_changed_callback:
             self.row_changed_callback()
 
     def add_arg(self, flag, value):
         """Adds an Engine Args row (used by the parameter browser)."""
         self._add_row('args', flag, value)
+        self._dirty = True
         if self.row_changed_callback:
             self.row_changed_callback()
 

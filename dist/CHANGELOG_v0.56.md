@@ -32,6 +32,8 @@ Both run the venv Python + `serve\server.py --engine strata --config <json> --po
 
 **Save to File** writes both targets: the JSON config (validated before writing; the previous version is kept as `<name>.json.bak`) and the models.txt plumbing. If the JSON write fails, nothing is saved — the two files never disagree. Types are preserved: booleans stay booleans, `port` stays a number, `gpu: [1]` stays an int list, env values stay strings.
 
+**Unsaved config edits are live at launch.** Like llama.cpp profiles (which launch from the editor, not from the saved file), clicking **Load** on a Strata profile first writes any unsaved edits in the config editor to the JSON file — previous version kept as `.bak`, launch aborted if the write fails — so the engine starts with exactly what the launcher shows. **Reset** still re-reads the editor from the JSON file on disk.
+
 **Parameter browser for Strata** — a dedicated Strata flag set for `serve/server.py` (Engine & Config, Server, GPU & Memory, Advanced) plus five click-to-add groups of `strata.exe` engine flags condensed from its `--help` (Context & KV, Model & PLE, Speculative (MTP), Expert Cache & Adaptive, Prefill/Cache/GPU). Engine-arg additions land in the config's args section, not the command line.
 
 **Notes**
@@ -73,7 +75,7 @@ The server output viewer is now bounded (~200 K characters, trimmed on a line bo
 ## Technical Changes
 
 - **New** `core/strata_config.py` — load/save the Strata JSON (utf-8-sig read, `indent=1` write, `.bak` backup, round-trip validation), split/merge between the JSON and editor sections with type-preserving coercion
-- **New** `ui/strata_config_panel.py` — the five-section JSON config editor widget (rows, checkboxes for booleans, add/remove per section)
+- **New** `ui/strata_config_panel.py` — the five-section JSON config editor widget (rows, checkboxes for booleans, add/remove per section, unsaved-changes tracking)
 - **New** `grant-large-pages.ps1` — one-time elevated setup that grants `SeLockMemoryPrivilege` + `SeIncreaseWorkingSetPrivilege` to your account via the LSA policy API (`-Revoke` to undo); log off/on afterwards
 - `platform_utils.py`: `is_strata_command`/`is_strata_params` detection, `port_in_use`, `enable_large_page_privileges` (ctypes `AdjustTokenPrivileges`), `strata_full_stop` (STOP-STRATA replication), `regenerate_greedy_config`
 - `command_builder.py`: `Serve Script` positional parameter preserved through parse→build; `_merge_path_tokens` for unquoted paths with spaces
@@ -81,5 +83,5 @@ The server output viewer is now bounded (~200 K characters, trimmed on a line bo
 - `parameters_db.py`: `STRATA_PARAMETERS` (serve/server.py flags) + `STRATA_ENGINE_ARGS` (strata.exe flags, `target: strata_args`)
 - `parameter_browser.py`: `set_mode('llama'|'ninfer'|'strata')`; Strata mode shows both Strata groups
 - `right_panel.py`: embeds the Strata config panel (visible only for Strata profiles, mirrors the profile's own `--config` file); `.py` added to browse-able extensions
-- `main_window.py`: Strata launch preflight (port guard, greedy regen-if-missing, privilege enable + log lines), `ready:` line → LOADED, full-stop on unload, config saved before models.txt, wizard gate, engine-arg browser routing
+- `main_window.py`: Strata launch preflight (port guard, greedy regen-if-missing, privilege enable + log lines, unsaved config edits written to the JSON before launch), `ready:` line → LOADED, full-stop on unload, config saved before models.txt, wizard gate, engine-arg browser routing
 - `system_analyzer.py`, `tuning_wizard.py`, `left_panel.py`, `summary_panel.py`: the fixes listed above
