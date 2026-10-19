@@ -729,6 +729,10 @@ class MainWindow(QWidget):
             elif reply == QMessageBox.StandardButton.Cancel:
                 self.left_panel.set_dropdown_index(self.previous_model_index)
                 return
+            elif reply == QMessageBox.StandardButton.Discard:
+                # A launch may have provisionally written unsaved Strata config
+                # edits to the JSON file; discarding must undo that too.
+                self.right_panel.revert_strata_config_file()
             # Discard: fall through — right_panel.populate() clears the dirty state
         self._reload_editor_for_model(index)
         self.previous_model_index = index
@@ -1077,9 +1081,14 @@ class MainWindow(QWidget):
                     if retry == QMessageBox.StandardButton.Cancel:
                         event.ignore()
                         return
+                    self.right_panel.revert_strata_config_file()
             elif reply == QMessageBox.StandardButton.Cancel:
                 event.ignore();
                 return
+            elif reply == QMessageBox.StandardButton.Discard:
+                # Undo any provisional Strata config write made at launch —
+                # the profile was never saved, so the file must go back too.
+                self.right_panel.revert_strata_config_file()
         self.unload_model()
         event.accept()
 

@@ -257,6 +257,12 @@ class RightPanel(QWidget):
         self.strata_panel.mark_clean()
         self.strata_panel.update_saved(cfg)
 
+    def revert_strata_config_file(self):
+        """Discard path: undo a provisional launch write by putting the saved
+        snapshot back on disk. No-op for non-Strata profiles or when the file
+        already matches the saved state."""
+        return self.strata_panel.revert_file_to_saved()
+
     def add_strata_arg(self, flag, value):
         self.strata_panel.add_arg(flag, value)
 

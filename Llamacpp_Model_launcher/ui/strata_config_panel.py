@@ -5,8 +5,8 @@ import copy
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
                              QScrollArea, QFrame, QPushButton, QCheckBox)
 from Llamacpp_Model_launcher.core.strata_config import (ConfigSections, Row,
-                                                        load_config, split_config,
-                                                        merge_config)
+                                                        load_config, save_config,
+                                                        split_config, merge_config)
 
 _TITLE_QSS = "font-weight: bold; color: #D1D1D1; font-size: 10pt; background: transparent;"
 _HINT_QSS = "color: #808080; font-size: 8pt; background: transparent;"
@@ -163,11 +163,23 @@ class StrataConfigPanel(QWidget):
         """After an explicit Save to File, the snapshot becomes the saved state."""
         self._saved_data = copy.deepcopy(cfg)
 
+    def revert_file_to_saved(self):
+        """Undo a provisional launch write: write the saved-state snapshot back
+        to the config file. No-op when the file already matches the snapshot.
+        Returns (ok, error_message)."""
+        if not self._path or not self._saved_data:
+            return True, ""
+        data, err = load_config(self._path)
+        if err or data == self._saved_data:
+            return True, ""
+        return save_config(self._path, self._saved_data)
+
     def restore_saved(self):
         """Re-render the editor from the saved-state snapshot — the config as
         it was when the profile was selected (or last explicitly saved). A
         launch auto-write may have pushed unsaved edits to the file; Reset
-        must still undo them, so it restores from memory, not from the file."""
+        must still undo them, so it restores from memory, not from the file,
+        and writes the snapshot back so the file matches the saved state too."""
         if not self._saved_data:
             return
         self._clear_all_rows()
@@ -178,10 +190,10 @@ class StrataConfigPanel(QWidget):
             for row in rows:
                 self._add_row(key, row.key, row.value)
         self._loaded = True
-        # If the launch auto-write changed the file underneath, the editor now
-        # differs from the file again, so a later Load re-applies the saved values.
-        data, err = load_config(self._path) if self._path else (None, "no path")
-        self._dirty = (not err) and data != self._saved_data
+        # The provisional launch write must not survive a Reset: put the saved
+        # snapshot back on disk so file and editor both match the saved state.
+        ok, _ = self.revert_file_to_saved()
+        self._dirty = not ok
 
     # ------------------------------------------------------------------ rows
 
