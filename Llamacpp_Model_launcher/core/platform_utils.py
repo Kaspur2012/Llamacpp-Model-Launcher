@@ -244,25 +244,46 @@ def strata_full_stop(port, log=None, pump=None, timeout_s=20.0) -> bool:
 
 
 def regenerate_greedy_config(python_exe: str, config_path: str):
-    """Run Strata's make-greedy-config.py from the config's own folder.
+    """Run the Strata make-greedy-config script that generates THIS greedy
+    config, from the config's own folder.
 
-    Mirrors run-iq3_s_greedy.bat: the greedy JSON is regenerated from the live
-    strata-iq3_s.json at every greedy launch, so tuning added to the live
-    config carries over automatically. Returns (ok, message).
+    Each greedy JSON has its own generator (make-greedy-config.py writes
+    strata-iq3_s_greedy.json, make-greedy-config-ud.py writes the UD-Q4_K_XL
+    twin, ...). The right one is picked by matching this config's file name
+    in the script source, so multiple profiles sharing one folder never get
+    crossed. The greedy JSON is regenerated from the live official config at
+    every greedy launch, so tuning added there carries over automatically.
+    Returns (ok, message).
     """
+    import glob as _glob
     import os
     cfg_dir = os.path.dirname(os.path.abspath(config_path))
-    script = os.path.join(cfg_dir, 'make-greedy-config.py')
-    if not os.path.exists(script):
-        return False, f"make-greedy-config.py not found next to {config_path}"
+    cfg_name = os.path.basename(config_path)
+    scripts = sorted(_glob.glob(os.path.join(cfg_dir, 'make-greedy-config*.py')))
+    chosen = None
+    for s in scripts:
+        try:
+            with open(s, 'r', encoding='utf-8', errors='replace') as fh:
+                if cfg_name in fh.read():
+                    chosen = s
+                    break
+        except OSError:
+            continue
+    if chosen is None:
+        if len(scripts) == 1:
+            chosen = scripts[0]  # single legacy script: use it anyway
+        else:
+            return False, (f"No make-greedy-config*.py next to {config_path} "
+                           f"mentions {cfg_name}")
+    script = chosen
     try:
         proc = subprocess.run([python_exe, script], capture_output=True,
                               text=True, cwd=cfg_dir, **get_subprocess_kwargs())
     except OSError as e:
-        return False, f"Could not run make-greedy-config.py: {e}"
+        return False, f"Could not run {os.path.basename(script)}: {e}"
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or '').strip()
-        return False, f"make-greedy-config.py failed (exit {proc.returncode}): {detail}"
+        return False, f"{os.path.basename(script)} failed (exit {proc.returncode}): {detail}"
     return True, (proc.stdout or '').strip()
 
 

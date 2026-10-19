@@ -34,6 +34,8 @@ Both run the venv Python + `serve\server.py --engine strata --config <json> --po
 
 **Unsaved config edits are live at launch.** Like llama.cpp profiles (which launch from the editor, not from the saved file), clicking **Load** on a Strata profile first writes any unsaved edits in the config editor to the JSON file — previous version kept as `.bak`, launch aborted if the write fails — so the engine starts with exactly what the launcher shows. That launch write is **provisional**: it only becomes permanent when you press **Save to File**. **Reset** restores the config as it was when the profile was selected (or last saved) *and* reverts the file to that state; choosing **Discard** (when switching profiles or exiting) reverts the JSON file too — unsaved edits never survive on disk.
 
+**One Strata folder, many profiles.** A folder can now hold several model pairs (e.g. `strata-iq3_s.json` + greedy and `strata-unsloth-ud-q4_k_xl.json` + greedy) sharing one `make-greedy-config*.py` area. When a greedy config file is missing at launch, the launcher picks the generator that actually writes *that* file by matching the file name inside each `make-greedy-config*.py` — previously it always ran `make-greedy-config.py`, which for a second model family would regenerate the wrong config.
+
 **Parameter browser for Strata** — a dedicated Strata flag set for `serve/server.py` (Engine & Config, Server, GPU & Memory, Advanced) plus five click-to-add groups of `strata.exe` engine flags condensed from its `--help` (Context & KV, Model & PLE, Speculative (MTP), Expert Cache & Adaptive, Prefill/Cache/GPU). Engine-arg additions land in the config's args section, not the command line.
 
 **Notes**
