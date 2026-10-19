@@ -1,5 +1,7 @@
 # ui/strata_config_panel.py
 
+import copy
+
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
                              QScrollArea, QFrame, QPushButton, QCheckBox)
 from Llamacpp_Model_launcher.core.strata_config import (ConfigSections, Row,
@@ -28,6 +30,7 @@ class StrataConfigPanel(QWidget):
         super().__init__(parent)
         self._path = None
         self._original = {}
+        self._saved_data = {}  # snapshot of the last truly saved/loaded file state
         self._loaded = False
         self._rows = {}       # section -> list of (key, input_widget)
         self._inputs = {}     # section -> list of input widgets (for reading back)
@@ -131,6 +134,7 @@ class StrataConfigPanel(QWidget):
             return
         self.error_label.hide()
         self._original = data
+        self._saved_data = copy.deepcopy(data)
         self.path_label.setText(f"Editing: {path}" + (("   —   " + note) if note else ""))
         sections = split_config(data)
         for key, rows in zip(('args', 'sampling', 'settings', 'vision', 'env'),
@@ -150,6 +154,34 @@ class StrataConfigPanel(QWidget):
 
     def mark_clean(self):
         self._dirty = False
+
+    def has_saved_snapshot(self):
+        """True when a saved-state snapshot exists for the current file."""
+        return bool(self._saved_data)
+
+    def update_saved(self, cfg):
+        """After an explicit Save to File, the snapshot becomes the saved state."""
+        self._saved_data = copy.deepcopy(cfg)
+
+    def restore_saved(self):
+        """Re-render the editor from the saved-state snapshot — the config as
+        it was when the profile was selected (or last explicitly saved). A
+        launch auto-write may have pushed unsaved edits to the file; Reset
+        must still undo them, so it restores from memory, not from the file."""
+        if not self._saved_data:
+            return
+        self._clear_all_rows()
+        sections = split_config(self._saved_data)
+        for key, rows in zip(('args', 'sampling', 'settings', 'vision', 'env'),
+                             (sections.args, sections.sampling, sections.settings,
+                              sections.vision, sections.env)):
+            for row in rows:
+                self._add_row(key, row.key, row.value)
+        self._loaded = True
+        # If the launch auto-write changed the file underneath, the editor now
+        # differs from the file again, so a later Load re-applies the saved values.
+        data, err = load_config(self._path) if self._path else (None, "no path")
+        self._dirty = (not err) and data != self._saved_data
 
     # ------------------------------------------------------------------ rows
 

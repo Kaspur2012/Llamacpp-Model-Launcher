@@ -223,7 +223,17 @@ class RightPanel(QWidget):
             if p.key == '--config':
                 config_value = p.value
                 break
-        self.strata_panel.load(config_value)
+        # Reset re-populates the SAME profile: restore the in-memory saved-state
+        # snapshot instead of re-reading the file (a launch auto-write may have
+        # pushed unsaved edits to disk — Reset must undo them). Selecting a
+        # different profile or a different --config path reads the file fresh.
+        same_file = (self.strata_panel.is_loaded()
+                     and os.path.normcase(str(self.strata_panel.config_path() or ""))
+                     == os.path.normcase(str(config_value or "")))
+        if same_file and self.strata_panel.has_saved_snapshot():
+            self.strata_panel.restore_saved()
+        else:
+            self.strata_panel.load(config_value)
         self.strata_panel.setVisible(True)
         # Strata command lines are short plumbing; give the config editor the room
         self.param_scroll_area.setMaximumHeight(220)
@@ -241,6 +251,11 @@ class RightPanel(QWidget):
 
     def mark_strata_config_clean(self):
         self.strata_panel.mark_clean()
+
+    def mark_strata_config_saved(self, cfg):
+        """Explicit Save to File: the current config becomes the saved state."""
+        self.strata_panel.mark_clean()
+        self.strata_panel.update_saved(cfg)
 
     def add_strata_arg(self, flag, value):
         self.strata_panel.add_arg(flag, value)

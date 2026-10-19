@@ -861,7 +861,7 @@ class MainWindow(QWidget):
                     QMessageBox.critical(self, "Config Save Failed",
                                          f"Could not write the Strata config:\n\n{err}\n\nNothing was saved.")
                     return False
-                self.right_panel.mark_strata_config_clean()
+                self.right_panel.mark_strata_config_saved(cfg)
                 strata_note = (f"\nStrata config saved: {cfg_path}"
                                f"\n(previous file kept as {cfg_path}.bak)")
         env_vars_text = self.right_panel.get_env_vars()
