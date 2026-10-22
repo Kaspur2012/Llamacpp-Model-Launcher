@@ -46,6 +46,13 @@ Both run the venv Python + `serve\server.py --engine strata --config <json> --po
 
 ## Fixes & Improvements
 
+### Llama.cpp / NInfer profiles load again (bare executable names)
+
+The switch to direct `QProcess` launches that shipped with the Strata work broke llama.cpp (and NInfer) profiles: `QProcess.start()` resolves a bare executable name like `llama-server.exe` against the **launcher's** directory, *not* the server directory you pick — the old `.bat` round-trip used to resolve it via the working directory. The process failed to start silently: no output at all and the status stuck on **Loading...** forever.
+
+- The executable is now resolved **before** launch: the profile's server directory first (adding `.exe` on Windows when needed), then `PATH`. Absolute paths are passed through untouched.
+- A failed launch is now never silent: the output shows `[ERROR] Failed to start process: <exe>` with a hint about the Llama.cpp directory, the status flips to **Error**, and the buttons are re-enabled immediately.
+
 ### Unquoted model paths with spaces now parse correctly
 
 A models-file line like `llama-server.exe -m D:\backup models\Qwen.gguf -c 4096` used to split the path into separate tokens. The parser now merges a run of unquoted tokens back into one path when the run starts with an absolute path and ends in `.gguf`/`.ninfer`. Quoted paths keep working as before.
@@ -86,4 +93,5 @@ The server output viewer is now bounded (~200 K characters, trimmed on a line bo
 - `parameter_browser.py`: `set_mode('llama'|'ninfer'|'strata')`; Strata mode shows both Strata groups
 - `right_panel.py`: embeds the Strata config panel (visible only for Strata profiles, mirrors the profile's own `--config` file); `.py` added to browse-able extensions
 - `main_window.py`: Strata launch preflight (port guard, greedy regen-if-missing, privilege enable + log lines, unsaved config edits written to the JSON before launch), `ready:` line → LOADED, full-stop on unload, config saved before models.txt, wizard gate, engine-arg browser routing
+- `main_window.py`: `_resolve_program()` — bare executables resolved against the server directory then `PATH` before `QProcess.start()` — plus an `errorOccurred` handler that turns `FailedToStart` into a visible Error status instead of a silent stuck Loading
 - `system_analyzer.py`, `tuning_wizard.py`, `left_panel.py`, `summary_panel.py`: the fixes listed above

@@ -293,6 +293,7 @@ You can create your own model_file.txt from scratch or save the model_file_examp
         *   Dedicated Strata parameter browser: `serve/server.py` flags plus five click-to-add groups of `strata.exe` engine flags (Context & KV, Model & PLE, Speculative/MTP, Expert Cache/Adaptive, Prefill/Cache/GPU) that land in the config's args section
         *   Tuning Wizard blocked for Strata (tuning lives in the JSON config); `--no-webui` never injected
     *   **Fixes & improvements**
+        *   **Llama.cpp / NInfer profiles load again** — the Strata release switched to direct process launches, which cannot resolve a bare executable name (`llama-server.exe`) from the server directory: loads silently produced no output and stuck on **Loading...** forever. The executable is now resolved from the profile's server directory first (then `PATH`), and any failed launch shows `[ERROR] Failed to start process: …` with an **Error** status instead of hanging silently
         *   **Unquoted model paths with spaces** in the models file are now merged back into one path (e.g. `-m D:\backup models\Qwen.gguf`)
         *   **Duplicate-name profiles keep their own `env:`/`llamacppdir:` blocks** — command lines are recognized structurally, so identical commands no longer steal each other's metadata
         *   **GPU names containing commas** no longer break the `nvidia-smi` fallback detection (memory columns were shifted)

@@ -2,6 +2,7 @@
 
 import os
 import shlex
+import shutil
 import subprocess
 import webbrowser
 import re
@@ -1189,6 +1190,7 @@ class MainWindow(QWidget):
         self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.process.readyReadStandardOutput.connect(self.handle_stdout)
         self.process.finished.connect(self.process_finished)
+        self.process.errorOccurred.connect(self._on_process_error)
         self.process.setWorkingDirectory(effective_dir)
 
         # Build the process environment (system env + any per-model KEY=value overrides)
@@ -1234,9 +1236,53 @@ class MainWindow(QWidget):
         else:
             self._loaded_is_strata = False
             self._loaded_port = None
-        self.process.start(args_list[0], args_list[1:])
-        self.left_panel.set_status(ServerStatus.LOADING);
+        # Set LOADING before start(): FailedToStart is delivered synchronously
+        # inside start(), and the error handler must not be overwritten by a
+        # later status change.
+        self.left_panel.set_status(ServerStatus.LOADING)
+        self.process.start(self._resolve_program(args_list[0], effective_dir), args_list[1:])
         self.update_button_states()
+
+    @staticmethod
+    def _resolve_program(program: str, work_dir: str) -> str:
+        """Resolve a (possibly bare) executable name to an absolute path before
+        handing it to QProcess.start().
+
+        QProcess resolves a relative program against the launcher's own current
+        directory, NOT the child's workingDirectory — so bare names like
+        'llama-server.exe' used to fail silently (FailedToStart, no output, no
+        finished signal, status stuck on 'Loading...'). The old .bat round-trip
+        resolved them via the working directory; we now do it explicitly:
+        try the server directory first, then PATH.
+        """
+        if not program or os.path.isabs(program):
+            return program
+        if work_dir:
+            candidate = os.path.join(work_dir, program)
+            if not os.path.exists(candidate) and IS_WINDOWS and not candidate.lower().endswith('.exe'):
+                candidate += '.exe'
+            if os.path.exists(candidate):
+                return candidate
+        found = shutil.which(program)
+        return found or program
+
+    def _on_process_error(self, error):
+        """QProcess.start() failed (program not found, bad working directory,
+        ...). Qt emits no finished signal in this case, so without this the
+        status would sit on 'Loading...' forever with no output."""
+        name = getattr(error, 'name', str(error))
+        if error == QProcess.ProcessError.FailedToStart:
+            program = self.process.program() if self.process else '?'
+            self.left_panel.append_output(
+                f"\n[ERROR] Failed to start process: {program}\n"
+                "The executable was not found. Check the Llama.cpp directory "
+                "(global or per-model) and the command's executable name.")
+            self.log_diagnostic(f"[DIAGNOSTICS] QProcess FailedToStart for '{program}'")
+            self.left_panel.set_status(ServerStatus.ERROR)
+            self.process = None
+            self.update_button_states()
+        else:
+            self.log_diagnostic(f"[DIAGNOSTICS] QProcess errorOccurred: {name}")
 
     @staticmethod
     def _parse_env_vars_text(env_vars_text, invalid_lines=None):
